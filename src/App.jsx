@@ -5,8 +5,7 @@ import { Button } from "./components/ui/button";
 import { Progress } from "./components/ui/progress";
 import { Input } from "./components/ui/input";
 import { Badge } from "./components/ui/badge";
-import { CheckCircle2, XCircle, TimerReset, Trophy, Calculator, Flag, UserCircle2, ShoppingBag, Check, Palette, WandSparkles, Cat, Pencil, Users, Rocket, Sparkles, CircleDollarSign } from "lucide-react";
-
+import { CheckCircle2, XCircle, TimerReset, Trophy, Calculator, Flag, UserCircle2, ShoppingBag, Check, Palette, Cat, Pencil, Users, Rocket, Sparkles, CircleDollarSign } from "lucide-react";
 const ROUND_TIME = 120;
 const QUESTIONS_PER_ROUND = 15;
 const PASS_SCORE = 14;
