@@ -1,11 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Card, CardContent } from "./components/ui/card";
-import { Button } from "./components/ui/button";
-import { Progress } from "./components/ui/progress";
-import { Input } from "./components/ui/input";
-import { Badge } from "./components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 import { CheckCircle2, XCircle, TimerReset, Trophy, Calculator, Flag, UserCircle2, ShoppingBag, Check, Palette, Cat, Pencil, Users, Rocket, Sparkles, CircleDollarSign } from "lucide-react";
+
 const ROUND_TIME = 120;
 const QUESTIONS_PER_ROUND = 15;
 const PASS_SCORE = 14;
@@ -1434,16 +1435,2081 @@ const levelInfo = {
 };
 
 export default function NSWProgressionsMathGame() {
+  const [screen, setScreen] = useState("home");
+  const [cheatModeActive, setCheatModeActive] = useState(false);
+  const [cheatSequence, setCheatSequence] = useState("");
+  const [shopOpen, setShopOpen] = useState(false);
+  const [purchasedItemsOpen, setPurchasedItemsOpen] = useState(false);
+  const [profileState, setProfileState] = useState({ coins: 0, ownedItems: [], equippedItems: [], activeBoosts: [] });
+  const [playerName, setPlayerName] = useState("");
+  const [isEditingPlayerName, setIsEditingPlayerName] = useState(false);
+  const [draftPlayerName, setDraftPlayerName] = useState("");
+  const [themeId, setThemeId] = useState("blue");
+  const [boostCountdownNow, setBoostCountdownNow] = useState(Date.now());
+  const [roundReward, setRoundReward] = useState(null);
+  const [testingCoinsEarned, setTestingCoinsEarned] = useState(0);
+  const [multiplayerState, setMultiplayerState] = useState(null);
+  const [mode, setMode] = useState(null);
+  const [level, setLevel] = useState(null);
+  const [mixedSelection, setMixedSelection] = useState({ addsubLevel: null, muldivLevel: null });
+  const [userHistory, setUserHistory] = useState({ addsubLevel: "AdS3", muldivLevel: "MuS3" });
+  const [testingScores, setTestingScores] = useState({ addsubScore: null, muldivScore: null });
+  const [hasCompletedTesting, setHasCompletedTesting] = useState(false);
+  const [pendingTestingExitConfirm, setPendingTestingExitConfirm] = useState(false);
+  const [showInfo, setShowInfo] = useState(false);
+  const [copyStatus, setCopyStatus] = useState("");
+  const [generatedSaveCode, setGeneratedSaveCode] = useState("");
+  const [saveCodeInput, setSaveCodeInput] = useState("");
+  const [saveCodeStatus, setSaveCodeStatus] = useState("");
+  const [showPasswordEntry, setShowPasswordEntry] = useState(false);
+  const [testingState, setTestingState] = useState(null);
+  const [questions, setQuestions] = useState([]);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [timeLeft, setTimeLeft] = useState(ROUND_TIME);
+  const [answer, setAnswer] = useState("");
+  const [feedback, setFeedback] = useState(null);
+  const [results, setResults] = useState([]);
+  const [roundFinished, setRoundFinished] = useState(false);
+  const inputRef = useRef(null);
+  const playerNameInputRef = useRef(null);
+
+  const currentQuestion = questions[currentIndex];
+  const isTestingMode = mode === "testing";
+  const isMultiplayerMode = mode === "multiplayer";
+  const score = useMemo(() => results.filter((r) => r.correct).length, [results]);
+  const progressValue = (results.length / QUESTIONS_PER_ROUND) * 100;
+  const multiplayerPlayerProgress = multiplayerState ? Math.min(100, (multiplayerState.playerScore / MULTIPLAYER_TARGET_SCORE) * 100) : 0;
+  const expectedAnsweredByNow = ((ROUND_TIME - timeLeft) / ROUND_TIME) * QUESTIONS_PER_ROUND;
+  const paceDelta = results.length - expectedAnsweredByNow;
+  const timerProgress = ((ROUND_TIME - timeLeft) / ROUND_TIME) * 100;
+
+  useEffect(() => {
+    setUserHistory(readUserHistory());
+    setProfileState(readProfileState());
+    setThemeId(readThemeId());
+    setTestingScores(readTestingScores());
+    setHasCompletedTesting(readTestingUnlock());
+    const savedName = readPlayerName();
+    setPlayerName(savedName);
+    setDraftPlayerName(savedName);
+  }, []);
+
+  useEffect(() => {
+    if (screen === "game" && !roundFinished && timeLeft > 0) {
+      const timer = setTimeout(() => setTimeLeft((t) => t - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+    if (screen === "game" && timeLeft <= 0 && !roundFinished) {
+      finishRound();
+    }
+  }, [screen, timeLeft, roundFinished]);
+
+  useEffect(() => {
+    if (screen === "multiplayerWaiting" && multiplayerState?.waitTimeLeft > 0) {
+      const timer = setTimeout(() => {
+        setMultiplayerState((current) => {
+          if (!current) return current;
+          const nextWait = current.waitTimeLeft - 1;
+          const nextOpponents = current.opponents.map((opponent) => {
+            if (!opponent.joined && nextWait <= opponent.joinAt) {
+              return { ...opponent, joined: true };
+            }
+            return opponent;
+          });
+          return { ...current, waitTimeLeft: nextWait, opponents: nextOpponents };
+        });
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+    if (screen === "multiplayerWaiting" && multiplayerState?.waitTimeLeft === 0) {
+      startMultiplayerRace();
+    }
+  }, [screen, multiplayerState?.waitTimeLeft]);
+
+  useEffect(() => {
+    if (screen !== "multiplayerGame" || !multiplayerState?.opponents) return;
+    const interval = setInterval(() => {
+      setMultiplayerState((current) => {
+        if (!current || current.finished) return current;
+        const nextElapsed = current.elapsedTime + 1;
+        const nextOpponents = current.opponents.map((opponent) => {
+          const previousProgress = opponent.progress;
+
+          if (opponent.isAdaptiveRival) {
+            let lockedPacePerSecond = opponent.lockedPacePerSecond;
+            if (current.playerScore >= 10 && !lockedPacePerSecond) {
+              lockedPacePerSecond = current.playerScore / Math.max(nextElapsed, 1);
+            }
+
+            let targetProgress;
+            if (lockedPacePerSecond) {
+              targetProgress = lockedPacePerSecond * nextElapsed;
+            } else {
+              const playerPace = current.playerScore / Math.max(nextElapsed, 1);
+              const chaseFactor = 0.92 + Math.random() * 0.16;
+              targetProgress = playerPace * nextElapsed * chaseFactor;
+            }
+
+            const randomNudge = Math.random() < 0.35 ? choice([0, 0, 1]) : 0;
+            const nextProgress = Math.min(
+              MULTIPLAYER_TARGET_SCORE,
+              Math.max(opponent.progress, Math.round(targetProgress + randomNudge))
+            );
+            return {
+              ...opponent,
+              progress: nextProgress,
+              burst: nextProgress > previousProgress,
+              lockedPacePerSecond,
+            };
+          }
+
+          const expectedProgress = Math.min(MULTIPLAYER_TARGET_SCORE, (nextElapsed / opponent.targetDuration) * MULTIPLAYER_TARGET_SCORE);
+          const randomNudge = Math.random() < 0.45 ? choice([0, 0, 1]) : 0;
+          const nextProgress = Math.min(MULTIPLAYER_TARGET_SCORE, Math.max(opponent.progress, Math.round(expectedProgress + randomNudge)));
+          return { ...opponent, progress: nextProgress, burst: nextProgress > previousProgress };
+        });
+        return { ...current, opponents: nextOpponents, elapsedTime: nextElapsed };
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [screen, multiplayerState?.opponents]);
+
+  useEffect(() => {
+    if (screen !== "multiplayerGame" || !multiplayerState?.opponents?.some((o) => o.burst)) return;
+    const timer = setTimeout(() => {
+      setMultiplayerState((current) => current ? { ...current, opponents: current.opponents.map((opponent) => ({ ...opponent, burst: false })) } : current);
+    }, 450);
+    return () => clearTimeout(timer);
+  }, [screen, multiplayerState?.opponents]);
+
+  useEffect(() => {
+    if (screen === "multiplayerGame" && multiplayerState?.finished) {
+      setScreen("multiplayerResults");
+    }
+  }, [screen, multiplayerState?.finished]);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setBoostCountdownNow(Date.now());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    if (screen === "game" && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select?.();
+    }
+  }, [screen, currentIndex, feedback, level]);
+
+  useEffect(() => {
+    function keepFocusReady() {
+      if (screen === "game" && inputRef.current && document.activeElement !== inputRef.current) {
+        inputRef.current.focus();
+      }
+    }
+
+    window.addEventListener("click", keepFocusReady);
+    window.addEventListener("keydown", keepFocusReady);
+    return () => {
+      window.removeEventListener("click", keepFocusReady);
+      window.removeEventListener("keydown", keepFocusReady);
+    };
+  }, [screen]);
+
+  function getActiveCoinMultiplier(profile = profileState) {
+    const now = Date.now();
+    const activeBoosts = (profile.activeBoosts || []).filter((boost) => boost.expiresAt > now);
+    if (activeBoosts.length !== (profile.activeBoosts || []).length) {
+      const cleaned = { ...profile, activeBoosts };
+      writeProfileState(cleaned);
+      setProfileState(cleaned);
+      return activeBoosts.some((boost) => boost.type === "coinMultiplier2x") ? 2 : 1;
+    }
+    return activeBoosts.some((boost) => boost.type === "coinMultiplier2x") ? 2 : 1;
+  }
+
+  function awardCoinsForRound(finalResults, options = {}) {
+    const { testingModeActive = false, activeMode = mode } = options;
+    const correctCount = finalResults.filter((r) => r.correct).length;
+    const bonus = correctCount === 15 ? 10 : correctCount === 14 ? 5 : 0;
+    const basePerQuestion = testingModeActive ? 2 : 1;
+    const bonusMultiplier = testingModeActive ? 2 : 1;
+    const mixedModeMultiplier = activeMode === "mixed" ? MIXED_MODE_MULTIPLIER : 1;
+    const levelMatchMultiplier = getCurrentLevelMatchMultiplier(activeMode);
+    const boostMultiplier = getActiveCoinMultiplier();
+    const baseCoins = Math.round(correctCount * basePerQuestion * mixedModeMultiplier * levelMatchMultiplier * boostMultiplier);
+    const bonusCoins = Math.round(bonus * bonusMultiplier * mixedModeMultiplier * levelMatchMultiplier * boostMultiplier);
+    const totalCoins = baseCoins + bonusCoins;
+    const storedProfile = readProfileState();
+    const nextProfile = {
+      ...storedProfile,
+      coins: (storedProfile.coins || 0) + totalCoins,
+    };
+    saveProfileState(nextProfile);
+    setRoundReward({ correctCount, baseCoins, bonusCoins, totalCoins, testingModeActive, boostMultiplier, mixedModeMultiplier, levelMatchMultiplier, activeMode });
+    if (testingModeActive) {
+      setTestingCoinsEarned((current) => current + totalCoins);
+    }
+    window.setTimeout(() => setRoundReward((current) => current), BONUS_DISPLAY_MS);
+  }
+
+  function getCurrentLevelMatchMultiplier(activeMode = mode) {
+    if (activeMode === "testing" || activeMode === "multiplayer") return 1;
+    if (activeMode === "addsub") {
+      return level === userHistory.addsubLevel ? CURRENT_LEVEL_MATCH_MULTIPLIER : 1;
+    }
+    if (activeMode === "muldiv") {
+      return level === userHistory.muldivLevel ? CURRENT_LEVEL_MATCH_MULTIPLIER : 1;
+    }
+    if (activeMode === "mixed") {
+      const matchesAdd = level?.addsubLevel && level.addsubLevel === userHistory.addsubLevel;
+      const matchesMul = level?.muldivLevel && level.muldivLevel === userHistory.muldivLevel;
+      return matchesAdd && matchesMul ? CURRENT_LEVEL_MATCH_MULTIPLIER : 1;
+    }
+    return 1;
+  }
+
+  function saveProfileState(nextProfile) {
+    writeProfileState(nextProfile);
+    setProfileState(nextProfile);
+  }
+
+  function handlePlayerNameChange(value) {
+    setDraftPlayerName(value);
+  }
+
+  function beginEditingPlayerName() {
+    setDraftPlayerName(playerName);
+    setIsEditingPlayerName(true);
+    window.setTimeout(() => playerNameInputRef.current?.focus(), 0);
+  }
+
+  function savePlayerName() {
+    const trimmedName = draftPlayerName.trim().slice(0, 20);
+    setPlayerName(trimmedName);
+    writePlayerName(trimmedName);
+    setDraftPlayerName(trimmedName);
+    setIsEditingPlayerName(false);
+  }
+
+  function cancelPlayerNameEdit() {
+    setDraftPlayerName(playerName);
+    setIsEditingPlayerName(false);
+  }
+
+  function handleCheatLetterClick(letter) {
+    setCheatSequence((current) => {
+      const next = `${current}${letter}`.slice(-3);
+      if (next === "POW") {
+        setCheatModeActive((active) => !active);
+        return "";
+      }
+      return "POW".startsWith(next) ? next : letter === "P" ? "P" : "";
+    });
+  }
+
+  function clearAllData() {
+    if (typeof window === "undefined") return;
+    window.localStorage.removeItem(STORAGE_KEY);
+    window.localStorage.removeItem(PROFILE_STORAGE_KEY);
+    window.localStorage.removeItem(PLAYER_NAME_STORAGE_KEY);
+    window.localStorage.removeItem(THEME_STORAGE_KEY);
+    window.localStorage.removeItem(TESTING_SCORE_STORAGE_KEY);
+    window.localStorage.removeItem(TESTING_UNLOCK_STORAGE_KEY);
+    setProfileState({ coins: 0, ownedItems: [], equippedItems: [], activeBoosts: [] });
+    setUserHistory({ addsubLevel: "AdS3", muldivLevel: "MuS3" });
+    setTestingScores({ addsubScore: null, muldivScore: null });
+    setHasCompletedTesting(false);
+    setPlayerName("");
+    setDraftPlayerName("");
+    setThemeId("blue");
+    setShopOpen(false);
+    setPurchasedItemsOpen(false);
+    setTestingCoinsEarned(0);
+    setMultiplayerState(null);
+    setMode(null);
+    setLevel(null);
+    setMixedSelection({ addsubLevel: null, muldivLevel: null });
+    setTestingState(null);
+    setQuestions([]);
+    setCurrentIndex(0);
+    setResults([]);
+    setAnswer("");
+    setFeedback(null);
+    setRoundFinished(false);
+    setTimeLeft(ROUND_TIME);
+    setPendingTestingExitConfirm(false);
+    setScreen("home");
+  }
+
+  function activateUpgrade(item) {
+    if (item?.themeId) {
+      setThemeId(item.themeId);
+      writeThemeId(item.themeId);
+      return;
+    }
+    if (!item?.boostType || !item?.durationMs) return;
+    const now = Date.now();
+    const storedProfile = readProfileState();
+    const activeBoosts = (storedProfile.activeBoosts || []).filter((boost) => boost.expiresAt > now);
+    activeBoosts.push({ id: `${item.id}-${now}`, type: item.boostType, expiresAt: now + item.durationMs, name: item.name });
+    saveProfileState({ ...storedProfile, activeBoosts });
+  }
+
+  function buyProfileItem(itemId) {
+    const item = PROFILE_SHOP_ITEMS.find((entry) => entry.id === itemId);
+    if (!item) return;
+    const storedProfile = readProfileState();
+    if ((storedProfile.ownedItems || []).includes(itemId) && item.category !== "upgrades") {
+      toggleEquipItem(itemId);
+      return;
+    }
+    if (!cheatModeActive && (storedProfile.coins || 0) < item.cost) return;
+
+    const alreadyOwned = (storedProfile.ownedItems || []).includes(itemId);
+    const nextProfile = {
+      ...storedProfile,
+      coins: cheatModeActive ? storedProfile.coins : storedProfile.coins - item.cost,
+      ownedItems: alreadyOwned ? (storedProfile.ownedItems || []) : [...(storedProfile.ownedItems || []), itemId],
+      equippedItems: storedProfile.equippedItems || [],
+    };
+
+    saveProfileState(nextProfile);
+
+    if (item.category === "upgrades") {
+      activateUpgrade(item);
+      return;
+    }
+
+    toggleEquipItem(itemId, nextProfile);
+  }
+
+  function toggleEquipItem(itemId, baseProfile = null) {
+    const item = PROFILE_SHOP_ITEMS.find((entry) => entry.id === itemId);
+    if (!item || item.category === "upgrades") return;
+    const storedProfile = baseProfile || readProfileState();
+    if (!(storedProfile.ownedItems || []).includes(itemId)) return;
+
+    const sameCategoryIds = PROFILE_SHOP_ITEMS.filter((entry) => entry.category === item.category).map((entry) => entry.id);
+    const currentlyEquipped = storedProfile.equippedItems || [];
+    const isEquipped = currentlyEquipped.includes(itemId);
+
+    let nextEquipped;
+    if (isEquipped) {
+      nextEquipped = currentlyEquipped.filter((id) => id !== itemId);
+    } else {
+      nextEquipped = [...currentlyEquipped.filter((id) => !sameCategoryIds.includes(id)), itemId];
+    }
+
+    saveProfileState({ ...storedProfile, equippedItems: nextEquipped });
+  }
+
+  function startMode(selectedMode) {
+    if (selectedMode === "multiplayer" && !hasCompletedTesting) {
+      return;
+    }
+    if (selectedMode === "testing") {
+      startTestingMode();
+      return;
+    }
+    if (selectedMode === "multiplayer") {
+      setMode("multiplayer");
+      setScreen("multiplayerSelect");
+      return;
+    }
+    setMode(selectedMode);
+    setMixedSelection({ addsubLevel: null, muldivLevel: null });
+    setScreen("levels");
+  }
+
+  function startTestingMode() {
+    setTestingCoinsEarned(0);
+    const history = readUserHistory();
+    setUserHistory(history);
+    const initialTestingState = {
+      phase: "addsub",
+      startLevel: history.addsubLevel || "AdS3",
+      currentLevel: history.addsubLevel || "AdS3",
+      adsResolvedLevel: null,
+      musResolvedLevel: null,
+      lastScore: null,
+    };
+    setTestingState(initialTestingState);
+    setMode("testing");
+    startLevel(history.addsubLevel || "AdS3", { selectedMode: "testing", testing: initialTestingState });
+  }
+
+  function startMultiplayerLobby(selectedMultiplayerMode) {
+    const history = readUserHistory();
+    const raceLevel = getMultiplayerLevelFromMode(selectedMultiplayerMode, history);
+    setMultiplayerState({
+      selectedMode: selectedMultiplayerMode,
+      raceLevel,
+      waitTimeLeft: MULTIPLAYER_WAIT_SECONDS,
+      opponents: buildFakeMultiplayerOpponents(),
+      playerScore: 0,
+      elapsedTime: 0,
+      finished: false,
+      winner: null,
+      placement: null,
+      placementNumber: null,
+      placementBonus: 0,
+      playerCoinsEarned: 0,
+    });
+    setScreen("multiplayerWaiting");
+  }
+
+  function startMultiplayerRace() {
+    setMultiplayerState((current) => {
+      if (!current) return current;
+      setQuestions(Array.from({ length: 120 }, () => generateQuestion(current.selectedMode, current.raceLevel)));
+      setCurrentIndex(0);
+      setAnswer("");
+      setFeedback(null);
+      setResults([]);
+      setRoundFinished(false);
+      setLevel(current.raceLevel);
+      setScreen("multiplayerGame");
+      return {
+        ...current,
+        waitTimeLeft: 0,
+        playerScore: 0,
+        elapsedTime: 0,
+        finished: false,
+        winner: null,
+        placement: null,
+        placementNumber: null,
+        placementBonus: 0,
+        playerCoinsEarned: 0,
+      };
+    });
+  }
+
+  function startMixedLevelSelection(levelType, selectedLevel) {
+    const nextSelection = {
+      ...mixedSelection,
+      [levelType]: selectedLevel,
+    };
+    setMixedSelection(nextSelection);
+  }
+
+  function startLevel(selectedLevel, options = {}) {
+    const activeMode = options.selectedMode || mode;
+    const activeTestingState = options.testing || testingState;
+    if (options.testing) {
+      setTestingState(options.testing);
+    }
+    setLevel(selectedLevel);
+    setQuestions(buildRound(activeMode === "testing" ? activeTestingState?.phase || "addsub" : activeMode, selectedLevel));
+    setCurrentIndex(0);
+    setTimeLeft(ROUND_TIME);
+    setPendingTestingExitConfirm(false);
+    setAnswer("");
+    setFeedback(null);
+    setResults([]);
+    setRoundFinished(false);
+    setScreen("game");
+  }
+
+  function finishRound(finalResults = results) {
+    setRoundFinished(true);
+    setResults(finalResults);
+    awardCoinsForRound(finalResults, { testingModeActive: mode === "testing", activeMode: mode === "testing" ? testingState?.phase || "addsub" : mode });
+
+    if (mode === "testing") {
+      handleTestingRoundComplete(finalResults);
+      return;
+    }
+
+    setScreen("results");
+  }
+
+  function updateStoredLevels(partial) {
+    const updated = { ...readUserHistory(), ...partial };
+    writeUserHistory(updated);
+    setUserHistory(updated);
+  }
+
+  function updateTestingScores(partial) {
+    const updated = { ...readTestingScores(), ...partial };
+    writeTestingScores(updated);
+    setTestingScores(updated);
+  }
+
+  function handleTestingRoundComplete(finalResults) {
+    const finalScore = finalResults.filter((r) => r.correct).length;
+    const phase = testingState?.phase || "addsub";
+    const currentTestingLevel = testingState?.currentLevel || level;
+
+    if (finalScore >= TESTING_PASS_SCORE) {
+      const higherLevel = getNextLevel(phase, currentTestingLevel);
+      if (higherLevel) {
+        const nextTestingState = {
+          ...testingState,
+          currentLevel: higherLevel,
+          lastScore: finalScore,
+        };
+        setTestingState(nextTestingState);
+        startLevel(higherLevel, { selectedMode: "testing", testing: nextTestingState });
+        return;
+      }
+
+      if (phase === "addsub") {
+        updateStoredLevels({ addsubLevel: currentTestingLevel });
+        updateTestingScores({ addsubScore: finalScore });
+        const history = readUserHistory();
+        const nextTestingState = {
+          ...testingState,
+          phase: "muldiv",
+          adsResolvedLevel: currentTestingLevel,
+          currentLevel: history.muldivLevel || "MuS3",
+          startLevel: history.muldivLevel || "MuS3",
+          lastScore: finalScore,
+        };
+        setTestingState(nextTestingState);
+        startLevel(nextTestingState.currentLevel, { selectedMode: "testing", testing: nextTestingState });
+        return;
+      }
+
+      updateStoredLevels({ muldivLevel: currentTestingLevel });
+      updateTestingScores({ muldivScore: finalScore });
+      writeTestingUnlock(true);
+      setHasCompletedTesting(true);
+      setTestingState((prev) => ({ ...prev, musResolvedLevel: currentTestingLevel, lastScore: finalScore }));
+      setScreen("testingComplete");
+      return;
+    }
+
+    if (finalScore >= TESTING_HOLD_MIN && finalScore <= TESTING_HOLD_MAX) {
+      if (phase === "addsub") {
+        updateStoredLevels({ addsubLevel: currentTestingLevel });
+        updateTestingScores({ addsubScore: finalScore });
+        const history = readUserHistory();
+        const nextTestingState = {
+          ...testingState,
+          phase: "muldiv",
+          adsResolvedLevel: currentTestingLevel,
+          currentLevel: history.muldivLevel || "MuS3",
+          startLevel: history.muldivLevel || "MuS3",
+          lastScore: finalScore,
+        };
+        setTestingState(nextTestingState);
+        startLevel(nextTestingState.currentLevel, { selectedMode: "testing", testing: nextTestingState });
+        return;
+      }
+
+      updateStoredLevels({ muldivLevel: currentTestingLevel });
+      updateTestingScores({ muldivScore: finalScore });
+      writeTestingUnlock(true);
+      setHasCompletedTesting(true);
+      setTestingState((prev) => ({ ...prev, musResolvedLevel: currentTestingLevel, lastScore: finalScore }));
+      setScreen("testingComplete");
+      return;
+    }
+
+    const lowerLevel = getPreviousLevel(phase, currentTestingLevel);
+    if (lowerLevel) {
+      const nextTestingState = {
+        ...testingState,
+        currentLevel: lowerLevel,
+        lastScore: finalScore,
+      };
+      setTestingState(nextTestingState);
+      startLevel(lowerLevel, { selectedMode: "testing", testing: nextTestingState });
+      return;
+    }
+
+    if (phase === "addsub") {
+      updateStoredLevels({ addsubLevel: currentTestingLevel });
+    updateTestingScores({ addsubScore: finalScore });
+      const history = readUserHistory();
+      const nextTestingState = {
+        ...testingState,
+        phase: "muldiv",
+        adsResolvedLevel: currentTestingLevel,
+        currentLevel: history.muldivLevel || "MuS3",
+        startLevel: history.muldivLevel || "MuS3",
+        lastScore: finalScore,
+      };
+      setTestingState(nextTestingState);
+      startLevel(nextTestingState.currentLevel, { selectedMode: "testing", testing: nextTestingState });
+      return;
+    }
+
+    updateStoredLevels({ muldivLevel: currentTestingLevel });
+      updateTestingScores({ muldivScore: finalScore });
+      writeTestingUnlock(true);
+      setHasCompletedTesting(true);
+      setTestingState((prev) => ({ ...prev, musResolvedLevel: currentTestingLevel, lastScore: finalScore }));
+      setScreen("testingComplete");
+  }
+
+  function handleSubmit(e) {
+    e.preventDefault();
+    if (!currentQuestion || feedback) return;
+
+    if (screen === "multiplayerGame") {
+      handleMultiplayerSubmit();
+      return;
+    }
+
+    const cleaned = answer.trim();
+    const isCorrect = answersMatch(cleaned, currentQuestion.answer);
+
+    const entry = {
+      prompt: currentQuestion.prompt,
+      expected: currentQuestion.answer,
+      given: cleaned,
+      correct: isCorrect,
+      strategy: tipFromQuestion(currentQuestion),
+    };
+
+    const newResults = [...results, entry];
+    setResults(newResults);
+    setFeedback(isCorrect ? "correct" : "incorrect");
+
+    setTimeout(() => {
+      setFeedback(null);
+      setAnswer("");
+
+      const nextIndex = currentIndex + 1;
+      if (nextIndex >= QUESTIONS_PER_ROUND) {
+        finishRound(newResults);
+      } else {
+        setCurrentIndex(nextIndex);
+      }
+    }, 450);
+  }
+
+  function handleMultiplayerSubmit() {
+    const cleaned = answer.trim();
+    const isCorrect = answersMatch(cleaned, currentQuestion.answer);
+    setFeedback(isCorrect ? "correct" : "incorrect");
+
+    setTimeout(() => {
+      setFeedback(null);
+      setAnswer("");
+      setMultiplayerState((current) => {
+        if (!current || current.finished) return current;
+        const nextPlayerScore = isCorrect ? current.playerScore + 1 : current.playerScore;
+        const liveCoins = 0;
+        if (nextPlayerScore >= MULTIPLAYER_TARGET_SCORE) {
+          const higherBots = current.opponents.filter((opponent) => opponent.progress > nextPlayerScore).length;
+          const placementNumber = higherBots + 1;
+          const placement = placementNumber === 1 ? "win" : placementNumber === 2 ? "second" : placementNumber === 3 ? "third" : "finish";
+          const placementBonus = MULTIPLAYER_PLACEMENT_COINS[placementNumber] || 5;
+          const totalCoins = placementBonus;
+          const storedProfile = readProfileState();
+          saveProfileState({ ...storedProfile, coins: (storedProfile.coins || 0) + totalCoins });
+          return {
+            ...current,
+            playerScore: nextPlayerScore,
+            finished: true,
+            winner: playerName?.trim() || "You",
+            placement,
+            placementNumber,
+            placementBonus,
+            playerCoinsEarned: totalCoins,
+          };
+        }
+        return { ...current, playerScore: nextPlayerScore, playerCoinsEarned: liveCoins };
+      });
+      setCurrentIndex((index) => Math.min(index + 1, questions.length - 1));
+    }, 300);
+  }
+
+  function restartSameLevel() {
+    startLevel(level);
+  }
+
+  function nextLevel() {
+    const next = getNextLevel(mode, level);
+    if (next) {
+      startLevel(next);
+    } else {
+      setScreen("complete");
+    }
+  }
+
+  function requestTestingExit() {
+    setPendingTestingExitConfirm(true);
+  }
+
+  function cancelTestingExit() {
+    setPendingTestingExitConfirm(false);
+  }
+
+  async function copyResultsToClipboard() {
+    const addScoreText = testingScores.addsubScore !== null ? `${testingScores.addsubScore}/15` : "__/15";
+    const mulScoreText = testingScores.muldivScore !== null ? `${testingScores.muldivScore}/15` : "__/15";
+    const resultsText = `${userHistory.addsubLevel}   ${addScoreText}, ${userHistory.muldivLevel}   ${mulScoreText}`;
+
+    try {
+      if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(resultsText);
+        setCopyStatus("Copied");
+        window.setTimeout(() => setCopyStatus(""), 1800);
+        return;
+      }
+    } catch {}
+
+    try {
+      if (typeof document !== "undefined") {
+        const textArea = document.createElement("textarea");
+        textArea.value = resultsText;
+        textArea.readOnly = true;
+        textArea.style.position = "fixed";
+        textArea.style.left = "-9999px";
+        textArea.style.top = "0";
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        textArea.setSelectionRange(0, textArea.value.length);
+
+        let copied = false;
+        if (typeof document.execCommand === "function") {
+          copied = document.execCommand("copy");
+        }
+
+        document.body.removeChild(textArea);
+
+        if (copied) {
+          setCopyStatus("Copied");
+          window.setTimeout(() => setCopyStatus(""), 1800);
+          return;
+        }
+      }
+    } catch {}
+
+    try {
+      if (typeof window !== "undefined") {
+        window.prompt("Copy these results:", resultsText);
+        setCopyStatus("Use Ctrl+C");
+        window.setTimeout(() => setCopyStatus(""), 2200);
+        return;
+      }
+    } catch {}
+
+    setCopyStatus(resultsText);
+    window.setTimeout(() => setCopyStatus(""), 3000);
+  }
+
+  function buildProgressPassword() {
+    const addWord = encodeLevelScoreWord(userHistory.addsubLevel, testingScores.addsubScore, progressionOrder.addsub, ADDSUB_SAVE_WORDS);
+    const mulWord = encodeLevelScoreWord(userHistory.muldivLevel, testingScores.muldivScore, progressionOrder.muldiv, MULDIV_SAVE_WORDS);
+    const packedNumber = packSaveNumber(profileState, themeId, hasCompletedTesting);
+    return `${addWord}${mulWord}${packedNumber}`;
+  }
+
+  function generateSavePassword() {
+    const nextCode = buildProgressPassword();
+    setGeneratedSaveCode(nextCode);
+    setSaveCodeInput(nextCode);
+    setSaveCodeStatus("Save password ready");
+    window.setTimeout(() => setSaveCodeStatus(""), 2200);
+  }
+
+  async function copySavePasswordToClipboard() {
+    if (!generatedSaveCode) return;
+
+    try {
+      if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(generatedSaveCode);
+        setSaveCodeStatus("Password copied");
+        window.setTimeout(() => setSaveCodeStatus(""), 1800);
+        return;
+      }
+    } catch {}
+
+    try {
+      if (typeof document !== "undefined") {
+        const textArea = document.createElement("textarea");
+        textArea.value = generatedSaveCode;
+        textArea.readOnly = true;
+        textArea.style.position = "fixed";
+        textArea.style.left = "-9999px";
+        textArea.style.top = "0";
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        textArea.setSelectionRange(0, textArea.value.length);
+        const copied = typeof document.execCommand === "function" ? document.execCommand("copy") : false;
+        document.body.removeChild(textArea);
+
+        if (copied) {
+          setSaveCodeStatus("Password copied");
+          window.setTimeout(() => setSaveCodeStatus(""), 1800);
+          return;
+        }
+      }
+    } catch {}
+
+    try {
+      if (typeof window !== "undefined") {
+        window.prompt("Copy this save password:", generatedSaveCode);
+        setSaveCodeStatus("Use Ctrl+C");
+        window.setTimeout(() => setSaveCodeStatus(""), 2200);
+      }
+    } catch {}
+  }
+
+  function loadSavePassword() {
+    try {
+      const { addWord, mulWord, numberPart } = extractSaveWords(saveCodeInput);
+      const addData = decodeLevelScoreWord(addWord, progressionOrder.addsub, ADDSUB_SAVE_WORDS);
+      const mulData = decodeLevelScoreWord(mulWord, progressionOrder.muldiv, MULDIV_SAVE_WORDS);
+      if (!addData || !mulData) throw new Error("Invalid save password");
+
+      const unpacked = unpackSaveNumber(numberPart);
+      const themeIds = Object.keys(SITE_THEMES);
+      const nextThemeId = themeIds[unpacked.themeIndex] || "blue";
+      const ownedSet = new Set(unpacked.ownedItems);
+      const equippedItems = unpacked.equippedItems.filter((id) => ownedSet.has(id));
+
+      const nextHistory = {
+        addsubLevel: addData.level,
+        muldivLevel: mulData.level,
+      };
+      const nextScores = {
+        addsubScore: addData.score,
+        muldivScore: mulData.score,
+      };
+      const nextProfile = {
+        coins: unpacked.coins,
+        ownedItems: unpacked.ownedItems,
+        equippedItems,
+        activeBoosts: [],
+      };
+
+      writeUserHistory(nextHistory);
+      setUserHistory(nextHistory);
+      writeTestingScores(nextScores);
+      setTestingScores(nextScores);
+      writeTestingUnlock(unpacked.unlocked);
+      setHasCompletedTesting(unpacked.unlocked);
+      saveProfileState(nextProfile);
+      writeThemeId(nextThemeId);
+      setThemeId(nextThemeId);
+      setGeneratedSaveCode("");
+      setSaveCodeStatus("Progress loaded");
+      window.setTimeout(() => setSaveCodeStatus(""), 2400);
+    } catch {
+      setSaveCodeStatus("Invalid save password");
+      window.setTimeout(() => setSaveCodeStatus(""), 2400);
+    }
+  }
+
+  function backToHome() {
+    setShopOpen(false);
+    setPurchasedItemsOpen(false);
+    setRoundReward(null);
+    setTestingCoinsEarned(0);
+    setMultiplayerState(null);
+    setScreen("home");
+    setMode(null);
+    setLevel(null);
+    setMixedSelection({ addsubLevel: null, muldivLevel: null });
+    setTestingState(null);
+    setQuestions([]);
+    setCurrentIndex(0);
+    setResults([]);
+    setAnswer("");
+    setFeedback(null);
+    setRoundFinished(false);
+    setTimeLeft(ROUND_TIME);
+    setPendingTestingExitConfirm(false);
+  }
+
+  const incorrectItems = results.filter((r) => !r.correct);
+  const activeCoinMultiplier = getActiveCoinMultiplier(profileState);
+  const equippedEmojiItem = PROFILE_SHOP_ITEMS.find((item) => profileState.equippedItems?.includes(item.id) && item.category === "emoji");
+  const equippedBackgroundItem = PROFILE_SHOP_ITEMS.find((item) => profileState.equippedItems?.includes(item.id) && item.category === "background");
+  const equippedRingItem = PROFILE_SHOP_ITEMS.find((item) => profileState.equippedItems?.includes(item.id) && item.category === "ring");
+  const premiumRingOverlay = getPremiumRingOverlayClass(equippedRingItem?.id);
+  const currentTheme = SITE_THEMES[themeId] || SITE_THEMES.blue;
+  const activeCoinBoost = (profileState.activeBoosts || []).filter((boost) => boost.type === "coinMultiplier2x" && boost.expiresAt > boostCountdownNow).sort((a, b) => a.expiresAt - b.expiresAt)[0] || null;
+  const passed = score >= PASS_SCORE;
+  const effectiveModeForProgression = mode === "testing" ? testingState?.phase : mode;
+  const next = effectiveModeForProgression && level ? getNextLevel(effectiveModeForProgression, level) : null;
+
   return (
-    <div className="min-h-screen bg-slate-950 text-white p-8">
-      <div className="max-w-3xl mx-auto rounded-3xl border border-white/10 bg-white/5 p-8 space-y-4">
-        <h1 className="text-3xl font-black">NSW Progressions Math Game</h1>
-        <p className="text-white/80">
-          This Vite project scaffold is set up for your app, but the full canvas component was too large to safely port verbatim in one pass inside this environment.
-        </p>
-        <p className="text-white/80">
-          The project includes your current progression data, question generators, save-password helpers, and Tailwind/Vite wiring. To finish the conversion, paste the rest of your latest canvas JSX below this point in <code>src/App.jsx</code> if needed.
-        </p>
+    <div className={`min-h-screen ${currentTheme.page} text-white p-6`}>
+      <div className="max-w-6xl mx-auto">
+        <div className="flex items-center justify-between gap-4 mb-6">
+          <div>
+            <h1 className="text-3xl md:text-5xl font-black tracking-tight">
+              Progressions
+              <span className="ml-2 inline-flex items-center gap-0.5">
+                <button type="button" onClick={() => handleCheatLetterClick("P")} className="inline text-inherit hover:text-white focus:outline-none">P</button>
+                <button type="button" onClick={() => handleCheatLetterClick("O")} className="inline text-inherit hover:text-white focus:outline-none">o</button>
+                <button type="button" onClick={() => handleCheatLetterClick("W")} className="inline text-inherit hover:text-white focus:outline-none">w</button>
+                <span>er-Up</span>
+              </span>
+            </h1>
+            <p className="text-white/85 mt-2 text-sm md:text-base">
+              A fast-paced NSW progressions mental maths challenge.
+            </p>
+            {cheatModeActive && (
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Button type="button" onClick={clearAllData} variant="outline" className="rounded-2xl border-red-300/30 bg-red-400/10 text-red-100 hover:bg-red-400/20">
+                  Clear all data
+                </Button>
+              </div>
+            )}
+          </div>
+          <div className="hidden md:flex items-center gap-2 bg-white/10 rounded-2xl px-4 py-3 backdrop-blur-sm">
+            <Calculator className="w-5 h-5" />
+            <span className="text-sm">15 questions • 2 minutes • Level up at 14/15</span>
+          </div>
+        </div>
+
+        {(cheatModeActive || activeCoinBoost) && (
+          <div className="mb-4 flex flex-wrap gap-3">
+            {cheatModeActive && (
+              <div className="inline-flex items-center rounded-2xl border border-amber-300/30 bg-amber-400/15 px-4 py-2 text-sm font-semibold text-amber-100">
+                Unlimited coins active
+              </div>
+            )}
+            {activeCoinBoost && (
+              <div className="inline-flex items-center rounded-2xl border border-emerald-300/30 bg-emerald-400/15 px-4 py-2 text-sm font-semibold text-emerald-100">
+                Double coins boost: {formatDuration(activeCoinBoost.expiresAt - boostCountdownNow)} left
+              </div>
+            )}
+          </div>
+        )}
+
+        <AnimatePresence mode="wait">
+          {screen === "home" && (
+            <motion.div
+              key="home"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="space-y-5"
+            >
+              <div className="grid gap-5">
+                <Card className="bg-white/10 border-white/10 rounded-3xl shadow-2xl overflow-hidden">
+                  <CardContent className="p-5 md:p-6">
+                    <div className="grid lg:grid-cols-[1.1fr_0.9fr] gap-6 items-center">
+                      <div>
+                        <div className="flex items-start justify-between gap-4 mb-4">
+                          <div>
+                            <div className="text-blue-100/70 text-xs uppercase tracking-[0.25em] mb-2">Profile</div>
+                            <div className="flex items-center gap-2">
+                              <h2 className="text-2xl md:text-3xl font-black text-white drop-shadow-[0_2px_8px_rgba(255,255,255,0.18)]">
+                                {playerName?.trim() ? playerName : "Player"}
+                              </h2>
+                              {!isEditingPlayerName && (
+                                <Button
+                                  type="button"
+                                  size="icon"
+                                  variant="ghost"
+                                  onClick={beginEditingPlayerName}
+                                  className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/15 text-blue-50"
+                                >
+                                  <Pencil className="w-4 h-4" />
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+                          <div className="rounded-full bg-amber-400/20 border border-amber-200/20 px-3 py-1 text-sm font-bold text-amber-100">
+                            {cheatModeActive ? "∞ coins" : `${profileState.coins} coins`}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-4">
+                          <div className="relative shrink-0">
+                            {premiumRingOverlay && (
+                              <div className={`absolute -inset-2 rounded-full opacity-95 ${premiumRingOverlay} blur-[1px]`} />
+                            )}
+                            <div className={`relative w-32 h-32 md:w-36 md:h-36 rounded-full flex items-center justify-center border border-white/15 shrink-0 overflow-hidden ${equippedBackgroundItem?.style || "bg-slate-900/70"} ${equippedRingItem?.style || ""}`}>
+                              {equippedEmojiItem ? (
+                                <div className="text-6xl md:text-7xl drop-shadow-[0_2px_8px_rgba(255,255,255,0.18)]">{equippedEmojiItem.emoji}</div>
+                              ) : (
+                                <UserCircle2 className="w-20 h-20 md:w-24 md:h-24 text-blue-100/85" />
+                              )}
+                              {premiumRingOverlay && <div className="absolute inset-[6px] rounded-full border border-white/20 pointer-events-none" />}
+                            </div>
+                          </div>
+                          <div className="flex-1 space-y-3">
+                            <div className="text-sm text-white/90">Start with a blank silhouette, then unlock profile upgrades in the shop.</div>
+                            {isEditingPlayerName && (
+                              <div className="space-y-2">
+                                <label className="text-xs uppercase tracking-[0.2em] text-white/80">Player name</label>
+                                <div className="flex items-center gap-2">
+                                  <Input
+                                    ref={playerNameInputRef}
+                                    value={draftPlayerName}
+                                    onChange={(e) => handlePlayerNameChange(e.target.value)}
+                                    onKeyDown={(e) => {
+                                      if (e.key === "Enter") savePlayerName();
+                                      if (e.key === "Escape") cancelPlayerNameEdit();
+                                    }}
+                                    placeholder="Enter your name"
+                                    maxLength={20}
+                                    className="h-11 rounded-2xl bg-white/10 border-white/15 text-white placeholder:text-white/40"
+                                  />
+                                  <Button
+                                    type="button"
+                                    size="icon"
+                                    onClick={savePlayerName}
+                                    className="w-11 h-11 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-white shrink-0"
+                                  >
+                                    <Check className="w-5 h-5" />
+                                  </Button>
+                                </div>
+                              </div>
+                            )}
+                            {profileState.equippedItems.length > 0 && (
+                              <div className="flex flex-wrap gap-2">
+                                {profileState.equippedItems.map((id) => {
+                                  const item = PROFILE_SHOP_ITEMS.find((entry) => entry.id === id);
+                                  return item ? <Badge key={id} className="bg-cyan-400/20 text-cyan-50 border-none">{item.name}</Badge> : null;
+                                })}
+                              </div>
+                            )}
+                            <div className="flex flex-wrap gap-2 text-xs text-white/80">
+                              {activeCoinMultiplier > 1 && <Badge className="bg-emerald-400/15 text-emerald-100 border-none">2x coin boost active</Badge>}
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              <Button onClick={() => setShowInfo((open) => !open)} variant="outline" className="rounded-2xl border-white/20 bg-white/5 text-white hover:bg-white/10">
+                                {showInfo ? "Hide Info" : "Info"}
+                              </Button>
+                              <Button onClick={() => setShopOpen((open) => !open)} className={`rounded-2xl ${currentTheme.primaryButton} text-white`}>
+                                <ShoppingBag className="w-4 h-4 mr-2" />
+                                {shopOpen ? "Close Shop" : "Open Shop"}
+                              </Button>
+                              <Button onClick={() => setPurchasedItemsOpen((open) => !open)} variant="outline" className="rounded-2xl border-white/20 bg-white/5 text-white hover:bg-white/10">
+                                {purchasedItemsOpen ? "Hide Purchased" : "Purchased Items"}
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="rounded-3xl bg-slate-950/75 border border-white/15 shadow-[0_12px_30px_rgba(15,23,42,0.35)] p-5 space-y-4">
+                        <div>
+                          <div className="text-white/75 text-xs uppercase tracking-[0.22em] mb-2">User's current level</div>
+                          <h2 className="text-3xl md:text-4xl font-black text-white drop-shadow-[0_3px_14px_rgba(255,255,255,0.18)]">Saved placement</h2>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="rounded-2xl bg-slate-800/95 border border-white/15 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] px-4 py-4 min-w-0">
+                            <div className="text-[10px] md:text-[11px] text-white/78 mb-2 uppercase tracking-[0.08em] whitespace-nowrap">Addition and Subtraction</div>
+                            <div className="text-3xl md:text-4xl font-black text-white drop-shadow-[0_2px_10px_rgba(255,255,255,0.12)]">{userHistory.addsubLevel}</div>
+                            <div className="text-sm font-semibold text-cyan-100/90 mt-2">{testingScores.addsubScore !== null ? `${testingScores.addsubScore}/15` : "No test yet"}</div>
+                          </div>
+                          <div className="rounded-2xl bg-slate-800/95 border border-white/15 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] px-4 py-4 min-w-0">
+                            <div className="text-[10px] md:text-[11px] text-white/78 mb-2 uppercase tracking-[0.08em] whitespace-nowrap">Multiplication and Division</div>
+                            <div className="text-3xl md:text-4xl font-black text-white drop-shadow-[0_2px_10px_rgba(255,255,255,0.12)]">{userHistory.muldivLevel}</div>
+                            <div className="text-sm font-semibold text-cyan-100/90 mt-2">{testingScores.muldivScore !== null ? `${testingScores.muldivScore}/15` : "No test yet"}</div>
+                          </div>
+                        </div>
+                        <div className="grid gap-3 pt-1">
+                          <div className="space-y-2">
+                            <div className="grid grid-cols-3 gap-2">
+                              <Button type="button" onClick={copyResultsToClipboard} variant="outline" className="rounded-2xl border-white/20 bg-white/5 text-white hover:bg-white/10 px-2 text-xs md:text-sm whitespace-nowrap">
+                                Copy Results
+                              </Button>
+                              <Button type="button" onClick={generateSavePassword} variant="outline" className="rounded-2xl border-white/20 bg-white/5 text-white hover:bg-white/10 px-2 text-xs md:text-sm whitespace-nowrap">
+                                Generate Password
+                              </Button>
+                              <Button type="button" onClick={() => setShowPasswordEntry((open) => !open)} variant="outline" className="rounded-2xl border-white/20 bg-white/5 text-white hover:bg-white/10 px-2 text-xs md:text-sm whitespace-nowrap">
+                                {showPasswordEntry ? "Hide Password" : "Enter Password"}
+                              </Button>
+                            </div>
+                            <div className="text-xs text-white/70">
+                              Copy results to send to your Class Teams. Use the password to transfer progress between computers.
+                            </div>
+                            <div className="flex flex-wrap items-center gap-3">
+                              {copyStatus && <span className="text-sm text-emerald-200 font-semibold">{copyStatus}</span>}
+                              {saveCodeStatus && <span className="text-sm text-cyan-200 font-semibold">{saveCodeStatus}</span>}
+                            </div>
+                          </div>
+
+                          {generatedSaveCode && (
+                            <div className="rounded-2xl bg-slate-900/60 border border-white/10 px-4 py-3 space-y-2">
+                              <div className="flex items-center justify-between gap-3">
+                                <div className="text-[11px] uppercase tracking-[0.18em] text-white/70">Save password</div>
+                                <Button type="button" size="sm" onClick={copySavePasswordToClipboard} variant="outline" className="h-8 rounded-xl border-white/20 bg-white/5 text-white hover:bg-white/10">
+                                  Copy
+                                </Button>
+                              </div>
+                              <div className="text-sm md:text-base font-mono break-all text-white">{generatedSaveCode}</div>
+                              <div className="text-xs text-white/70">Generate this code, then save it somewhere safe to use on a different computer later.</div>
+                            </div>
+                          )}
+
+                          {showPasswordEntry && (
+                            <div className="rounded-2xl bg-slate-900/60 border border-white/10 px-4 py-3 space-y-3">
+                              <div className="text-[11px] uppercase tracking-[0.18em] text-white/70">Load save password</div>
+                              <div className="flex flex-col sm:flex-row gap-2">
+                                <Input
+                                  value={saveCodeInput}
+                                  onChange={(e) => setSaveCodeInput(e.target.value)}
+                                  placeholder="Paste save password"
+                                  className="h-11 rounded-2xl bg-white/10 border-white/15 text-white placeholder:text-white/40"
+                                />
+                                <Button type="button" onClick={loadSavePassword} className={`rounded-2xl ${currentTheme.primaryButton} text-white`}>
+                                  Load
+                                </Button>
+                              </div>
+                              <div className="text-xs text-white/70">Paste a saved password from another computer to transfer progress into this device.</div>
+                            </div>
+                          )}
+                        </div>
+                        
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {purchasedItemsOpen && (
+                <Card className="bg-white/10 border-white/10 rounded-3xl shadow-2xl overflow-hidden">
+                  <CardContent className="p-5 md:p-6 space-y-4">
+                    <div>
+                      <div className="text-blue-100/70 text-xs uppercase tracking-[0.25em] mb-2">Purchased items</div>
+                      <h2 className="text-xl md:text-2xl font-bold">Your collection</h2>
+                    </div>
+
+                    <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                      {SHOP_CATEGORIES.map((category) => {
+                        const ownedItems = PROFILE_SHOP_ITEMS.filter(
+                          (item) => item.category === category.id && (profileState.ownedItems || []).includes(item.id)
+                        );
+                        const CategoryIcon = category.icon;
+                        return (
+                          <div key={category.id} className="rounded-2xl bg-slate-900/60 border border-white/10 p-4 space-y-3">
+                            <div className="flex items-center gap-2">
+                              <CategoryIcon className="w-4 h-4 text-cyan-100" />
+                              <div className="text-sm font-bold text-white">{category.label}</div>
+                              <Badge className="bg-white/10 text-blue-100 border-none ml-auto">{ownedItems.length}</Badge>
+                            </div>
+                            {ownedItems.length > 0 ? (
+                              <div className="flex flex-wrap gap-2">
+                                {ownedItems.map((item) => {
+                                  const isEquipped = (profileState.equippedItems || []).includes(item.id);
+                                  const isActiveTheme = item.themeId && themeId === item.themeId;
+                                  const isActive = isEquipped || isActiveTheme;
+                                  return (
+                                    <Button
+                                      key={item.id}
+                                      type="button"
+                                      size="sm"
+                                      onClick={() => {
+                                        if (item.themeId) {
+                                          activateUpgrade(item);
+                                        } else if (item.category !== "upgrades") {
+                                          toggleEquipItem(item.id);
+                                        }
+                                      }}
+                                      className={`h-auto min-h-8 px-3 py-1.5 rounded-full text-xs font-medium border ${isActive ? "bg-emerald-400/20 text-emerald-50 border-emerald-300/30 hover:bg-emerald-400/30" : "bg-white/10 text-blue-100 border-white/10 hover:bg-white/15"}`}
+                                    >
+                                      {item.emoji ? `${item.emoji} ` : ""}
+                                      {item.name}
+                                    </Button>
+                                  );
+                                })}
+                              </div>
+                            ) : (
+                              <div className="text-sm text-blue-100/55">No items purchased yet.</div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {showInfo && (
+                <Card className="bg-white/10 border-white/10 rounded-3xl shadow-2xl overflow-hidden">
+                  <CardContent className="p-5 md:p-6 space-y-6">
+                    <div>
+                      <div className="text-white/75 text-xs uppercase tracking-[0.25em] mb-2">Progression information</div>
+                      <h2 className="text-2xl md:text-3xl font-bold text-white">What each level looks like</h2>
+                    </div>
+                    <div className="grid lg:grid-cols-2 gap-5">
+                      <div className="rounded-3xl bg-slate-900/60 border border-white/10 p-4 space-y-4">
+                        <h3 className="text-xl font-bold text-white">Addition / Subtraction</h3>
+                        <div className="space-y-3 max-h-[420px] overflow-auto pr-1">
+                          {levelInfo.addsub.map((item) => (
+                            <div key={item.level} className="rounded-2xl bg-slate-950/70 border border-white/10 p-4 space-y-3">
+                              <div className="flex items-center justify-between gap-3">
+                                <div className="text-lg font-black text-white">{item.level}</div>
+                                <Badge className="bg-cyan-400/20 text-cyan-50 border-none">{item.skill}</Badge>
+                              </div>
+                              <div className="space-y-3 pt-1">
+                                {Array.isArray(item.entries) ? (
+                                  item.entries.map((entry, index) => (
+                                    <div key={index} className="rounded-xl bg-white/5 border border-white/10 p-3 space-y-1">
+                                      <div className="text-white text-sm font-semibold">{entry.type}</div>
+                                      <div className="text-white/80 text-sm"><span className="font-semibold">Example:</span> {entry.example}</div>
+                                      <div className="text-emerald-100 text-sm"><span className="font-semibold">Best strategy:</span> {entry.strategy}</div>
+                                    </div>
+                                  ))
+                                ) : (
+                                  <div className="rounded-xl bg-white/5 border border-white/10 p-3 space-y-1">
+                                    <div className="text-white/90 text-sm"><span className="font-semibold">Question types:</span> {Array.isArray(item.types) ? item.types.join(" • ") : item.types || "Not listed"}</div>
+                                    <div className="text-white/80 text-sm"><span className="font-semibold">Examples:</span> {Array.isArray(item.examples) ? item.examples.join(" • ") : item.examples || "Not listed"}</div>
+                                    <div className="text-emerald-100 text-sm"><span className="font-semibold">Best strategy:</span> {item.strategy || "Use the level strategy notes."}</div>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="rounded-3xl bg-slate-900/60 border border-white/10 p-4 space-y-4">
+                        <h3 className="text-xl font-bold text-white">Multiplication / Division</h3>
+                        <div className="space-y-3 max-h-[420px] overflow-auto pr-1">
+                          {levelInfo.muldiv.map((item) => (
+                            <div key={item.level} className="rounded-2xl bg-slate-950/70 border border-white/10 p-4 space-y-3">
+                              <div className="flex items-center justify-between gap-3">
+                                <div className="text-lg font-black text-white">{item.level}</div>
+                                <Badge className="bg-cyan-400/20 text-cyan-50 border-none">{item.skill}</Badge>
+                              </div>
+                              <div className="space-y-3 pt-1">
+                                {Array.isArray(item.entries) ? (
+                                  item.entries.map((entry, index) => (
+                                    <div key={index} className="rounded-xl bg-white/5 border border-white/10 p-3 space-y-1">
+                                      <div className="text-white text-sm font-semibold">{entry.type}</div>
+                                      <div className="text-white/80 text-sm"><span className="font-semibold">Example:</span> {entry.example}</div>
+                                      <div className="text-emerald-100 text-sm"><span className="font-semibold">Best strategy:</span> {entry.strategy}</div>
+                                    </div>
+                                  ))
+                                ) : (
+                                  <div className="rounded-xl bg-white/5 border border-white/10 p-3 space-y-1">
+                                    <div className="text-white/90 text-sm"><span className="font-semibold">Question types:</span> {Array.isArray(item.types) ? item.types.join(" • ") : item.types || "Not listed"}</div>
+                                    <div className="text-white/80 text-sm"><span className="font-semibold">Examples:</span> {Array.isArray(item.examples) ? item.examples.join(" • ") : item.examples || "Not listed"}</div>
+                                    <div className="text-emerald-100 text-sm"><span className="font-semibold">Best strategy:</span> {item.strategy || "Use the level strategy notes."}</div>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {shopOpen && (
+                <Card className="bg-white/10 border-white/10 rounded-3xl shadow-2xl">
+                  <CardContent className="p-5 md:p-6 space-y-6">
+                    <div className="flex items-center justify-between gap-4">
+                      <div>
+                        <div className="text-blue-100/70 text-xs uppercase tracking-[0.25em] mb-2">Shop</div>
+                        <h3 className="text-2xl font-bold">Profile upgrades</h3>
+                      </div>
+                      <div className="rounded-2xl bg-slate-900/60 border border-white/10 px-4 py-2 text-sm text-white font-semibold">
+                        Balance: {cheatModeActive ? "∞ coins" : `${profileState.coins} coins`}
+                      </div>
+                    </div>
+
+                    <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-4">
+                      {SHOP_CATEGORIES.map((category) => {
+                        const Icon = category.icon;
+                        const items = PROFILE_SHOP_ITEMS.filter((item) => item.category === category.id);
+                        return (
+                          <div key={category.id} className="rounded-3xl bg-slate-900/60 border border-white/10 p-4 space-y-4">
+                            <div className="flex items-center gap-3">
+                              <div className="w-12 h-12 rounded-2xl bg-cyan-500/20 flex items-center justify-center">
+                                <Icon className="w-6 h-6 text-cyan-100" />
+                              </div>
+                              <div>
+                                <div className="text-lg font-bold text-white">{category.label}</div>
+                                <div className="text-xs text-white/70 uppercase tracking-[0.2em]">{items.length} items</div>
+                              </div>
+                            </div>
+                            <div className="space-y-2 max-h-[430px] overflow-auto pr-1">
+                              {items.map((item) => {
+                                const owned = (profileState.ownedItems || []).includes(item.id);
+                                const equipped = (profileState.equippedItems || []).includes(item.id);
+                                const canAfford = cheatModeActive || (profileState.coins || 0) >= item.cost;
+                                const isUpgrade = item.category === "upgrades";
+                                return (
+                                  <div key={item.id} className="rounded-2xl bg-slate-950/60 border border-white/5 px-3 py-3 space-y-3">
+                                    <div className="flex items-start justify-between gap-3">
+                                      <div className="min-w-0">
+                                        <div className="flex items-center gap-2">
+                                          {item.emoji && <span className="text-xl">{item.emoji}</span>}
+                                          <span className="text-sm text-white font-semibold truncate">{item.name}</span>
+                                        </div>
+                                        {item.detail && <div className="text-xs text-white/80 mt-1">{item.detail}</div>}
+                                        {item.themeId && <div className="text-[11px] text-emerald-200 mt-1">Permanent theme</div>}
+                                      </div>
+                                      <span className="text-xs text-amber-100 shrink-0">{item.cost}</span>
+                                    </div>
+
+                                    {item.category === "background" && (
+                                      <div className="flex items-center gap-3">
+                                        <div className={`w-10 h-10 rounded-full border border-white/10 ${item.style}`} />
+                                        <div className="text-[11px] uppercase tracking-[0.12em] text-white/70">Preview</div>
+                                      </div>
+                                    )}
+
+                                    {item.category === "ring" && (
+                                      <div className="flex items-center gap-3">
+                                        <div className="relative w-10 h-10">
+                                          {isPremiumRing(item.id) && (
+                                            <div className={`absolute -inset-1 rounded-full ${getPremiumRingOverlayClass(item.id)} blur-[1px] opacity-95`} />
+                                          )}
+                                          <div className={`absolute inset-1 rounded-full bg-slate-900 ${item.style}`} />
+                                        </div>
+                                        <div className="text-[11px] uppercase tracking-[0.12em] text-white/70">Preview</div>
+                                      </div>
+                                    )}
+
+                                    <Button
+                                      onClick={() => (owned && !isUpgrade ? toggleEquipItem(item.id) : buyProfileItem(item.id))}
+                                      disabled={!owned && !canAfford}
+                                      className={`w-full rounded-2xl ${equipped ? "bg-emerald-500 hover:bg-emerald-400" : owned && !isUpgrade ? "bg-blue-500 hover:bg-blue-400" : "bg-cyan-500 hover:bg-cyan-400 disabled:bg-slate-700 disabled:text-slate-300"}`}
+                                    >
+                                      {item.themeId ? (themeId === item.themeId ? "Active theme" : owned ? "Apply theme" : "Buy theme") : isUpgrade ? "Buy & activate" : equipped ? "Equipped" : owned ? "Equip" : "Buy"}
+                                    </Button>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              <div className="space-y-5">
+                <div className="grid md:grid-cols-3 gap-5">
+                  {(["addsub", "muldiv", "mixed"]).map((key) => {
+                    const item = modeMeta[key];
+                    const practiceLocked = !hasCompletedTesting;
+                    return (
+                      <Card key={key} className={`bg-white/10 border-white/10 rounded-3xl shadow-2xl ${practiceLocked ? "opacity-55" : ""}`}>
+                        <CardContent className="p-6 flex flex-col gap-4 h-full">
+                          <div className="flex items-start justify-between gap-3">
+                            <Badge className={`w-fit shrink-0 ${currentTheme.accentBadge} border-none`}>Game Mode</Badge>
+                            <div className="text-right text-[11px] md:text-sm font-semibold leading-tight whitespace-nowrap ml-auto">
+                              {key === "addsub" && <span className="text-emerald-200">🪙 +1 per ✓ • Bonuses on 14+</span>}
+                              {key === "muldiv" && <span className="text-emerald-200">🪙 +1 per ✓ • Bonuses on 14+</span>}
+                              {key === "mixed" && <span className="text-cyan-200">🪙 +1.5 per ✓ • Bonuses on 14+</span>}
+                            </div>
+                          </div>
+                          <h2 className="text-2xl font-bold text-white">{item.title}</h2>
+                          <div className="text-white/85 min-h-[92px] space-y-2">
+                            <p>{item.description}</p>
+                            {practiceLocked && <p className="text-amber-200 font-semibold">Complete Testing Mode first to unlock practice modes.</p>}
+                          </div>
+                          <Button
+                            onClick={() => startMode(key)}
+                            disabled={practiceLocked}
+                            className={`rounded-2xl text-base py-6 ${currentTheme.primaryButton} text-white mt-auto disabled:bg-slate-700 disabled:text-slate-300`}
+                          >
+                            {`Choose ${item.title}`}
+                          </Button>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+                </div>
+
+                <div className="grid md:grid-cols-2 gap-5">
+                  {(["testing", "multiplayer"]).map((key) => {
+                    const item = modeMeta[key];
+                    return (
+                      <Card key={key} className={`bg-white/10 border-white/10 rounded-3xl shadow-2xl ${key === "multiplayer" && !hasCompletedTesting ? "opacity-55" : ""}`}>
+                        <CardContent className="p-6 flex flex-col gap-4 h-full">
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <Badge className={`w-fit ${currentTheme.accentBadge} border-none`}>{key === "testing" ? "Adaptive" : "Race Mode"}</Badge>
+                            <div className="text-right text-xs md:text-sm font-semibold">
+                              {key === "testing" && <span className="text-emerald-200">🪙 Double coins</span>}
+                              {key === "multiplayer" && <span className="text-cyan-200">🪙 1st 30 • 2nd 20 • 3rd 10 • 4th 5</span>}
+                            </div>
+                          </div>
+                          <h2 className="text-2xl font-bold text-white">{key === "multiplayer" ? "Race Mode" : item.title}</h2>
+                          <div className="text-white/85 min-h-[92px] space-y-2">
+                            <p>{item.description}</p>
+                            {key === "multiplayer" && <p className="text-cyan-200 font-semibold">Race Mode unlocks after Testing Mode is completed.</p>}
+                            {key === "multiplayer" && !hasCompletedTesting && <p className="text-amber-200 font-semibold">Complete Testing Mode first to unlock Race Mode.</p>}
+                            {key === "testing" && <p className="text-blue-100/70">Completing Testing Mode unlocks practice modes and Race Mode.</p>}
+                          </div>
+                          <Button
+                            onClick={() => startMode(key)}
+                            className={`rounded-2xl text-base py-6 ${currentTheme.primaryButton} text-white mt-auto`}
+                          >
+                            {key === "testing" ? "Start Testing" : "Enter Race Mode"}
+                          </Button>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {screen === "levels" && (
+            <motion.div
+              key="levels"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+            >
+              <Card className="bg-white/10 border-white/10 rounded-3xl shadow-2xl">
+                <CardContent className="p-6 md:p-8">
+                  <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
+                    <div>
+                      <h2 className="text-2xl md:text-3xl font-bold">Select a progression level</h2>
+                      <p className="text-blue-100/80 mt-2">
+                        {modeMeta[mode]?.title} • Students answer 15 questions against the clock.
+                      </p>
+                    </div>
+                    <Button variant="outline" onClick={backToHome} className="rounded-2xl border-white/20 bg-white/5 text-white hover:bg-white/10">
+                      Back
+                    </Button>
+                  </div>
+
+                  {mode === "mixed" ? (
+                    <div className="grid md:grid-cols-2 gap-6">
+                      <div className="rounded-3xl bg-slate-900/50 border border-white/10 p-5">
+                        <div className="text-blue-100/70 text-xs uppercase tracking-[0.25em] mb-2">Step 1</div>
+                        <h3 className="text-xl font-bold mb-4">Choose an AdS level</h3>
+                        <p className="text-sm text-blue-100/70 mb-4">Your current AdS level is highlighted. Matching it gives double coins.</p>
+                        <div className="grid grid-cols-2 gap-3">
+                          {progressionOrder.addsub.map((lvl) => {
+                            const isCurrent = lvl === userHistory.addsubLevel;
+                            const isSelected = mixedSelection.addsubLevel === lvl;
+                            return (
+                              <Button
+                                key={lvl}
+                                onClick={() => startMixedLevelSelection("addsubLevel", lvl)}
+                                className={`h-14 rounded-2xl text-base font-bold ${isSelected ? "bg-cyan-500 hover:bg-cyan-400" : isCurrent ? "bg-slate-800 hover:bg-slate-700 ring-2 ring-emerald-300/80 border border-emerald-300/70" : "bg-slate-800 hover:bg-slate-700"}`}
+                              >
+                                <div className="flex flex-col items-center leading-tight">
+                                <span>{lvl}</span>
+                                {isCurrent && <span className="mt-1 text-[10px] uppercase tracking-[0.08em] text-emerald-100">Double coins</span>}
+                              </div>
+                              </Button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      <div className="rounded-3xl bg-slate-900/50 border border-white/10 p-5">
+                        <div className="text-blue-100/70 text-xs uppercase tracking-[0.25em] mb-2">Step 2</div>
+                        <h3 className="text-xl font-bold mb-4">Choose a MuS level</h3>
+                        <p className="text-sm text-blue-100/70 mb-4">Your current MuS level is highlighted. Matching it gives double coins.</p>
+                        <div className="grid grid-cols-2 gap-3">
+                          {progressionOrder.muldiv.map((lvl) => {
+                            const isCurrent = lvl === userHistory.muldivLevel;
+                            const isSelected = mixedSelection.muldivLevel === lvl;
+                            return (
+                              <Button
+                                key={lvl}
+                                onClick={() => startMixedLevelSelection("muldivLevel", lvl)}
+                                className={`h-14 rounded-2xl text-base font-bold ${isSelected ? "bg-cyan-500 hover:bg-cyan-400" : isCurrent ? "bg-slate-800 hover:bg-slate-700 ring-2 ring-emerald-300/80 border border-emerald-300/70" : "bg-slate-800 hover:bg-slate-700"}`}
+                              >
+                                <div className="flex flex-col items-center leading-tight">
+                                <span>{lvl}</span>
+                                {isCurrent && <span className="mt-1 text-[10px] uppercase tracking-[0.08em] text-emerald-100">Double coins</span>}
+                              </div>
+                              </Button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      <div className="md:col-span-2 rounded-3xl bg-white/5 border border-white/10 p-4 flex flex-wrap items-center justify-between gap-3">
+                        <div className="text-sm text-blue-100/80">
+                          Current mixed setup: <span className="font-bold text-white">{mixedSelection.addsubLevel || "Choose AdS"}</span> + <span className="font-bold text-white">{mixedSelection.muldivLevel || "Choose MuS"}</span>
+                          <span className="block mt-2 text-emerald-200 font-semibold">Pick both highlighted current levels to get double coins.</span>
+                        </div>
+                        {mixedSelection.addsubLevel && mixedSelection.muldivLevel && (
+                          <Button onClick={() => startLevel(mixedSelection, { selectedMode: "mixed" })} className={`rounded-2xl ${currentTheme.primaryButton} text-white font-bold`}>
+                            Start Mixed Round
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      {progressionOrder[mode]?.map((lvl) => {
+                        const currentLevel = mode === "addsub" ? userHistory.addsubLevel : userHistory.muldivLevel;
+                        const isCurrent = lvl === currentLevel;
+                        return (
+                          <Button
+                            key={lvl}
+                            onClick={() => startLevel(lvl)}
+                            className={`h-16 rounded-2xl text-lg font-bold ${isCurrent ? "bg-slate-800 hover:bg-slate-700 ring-2 ring-emerald-300/80 border border-emerald-300/70" : "bg-slate-800 hover:bg-slate-700"}`}
+                          >
+                            <div className="flex flex-col items-center justify-center leading-tight">
+                            <span>{lvl}</span>
+                            {isCurrent && <span className="mt-1 text-[10px] uppercase tracking-[0.08em] text-emerald-100">Double coins</span>}
+                          </div>
+                          </Button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </motion.div>
+          )}
+
+          {screen === "multiplayerSelect" && (
+            <motion.div key="multiplayerSelect" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+              <Card className="bg-white/10 border-white/10 rounded-3xl shadow-2xl">
+                <CardContent className="p-6 md:p-8 space-y-6">
+                  <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                    <div>
+                      <h2 className="text-2xl md:text-3xl font-bold">Choose your multiplayer race</h2>
+                      <p className="text-blue-100/80 mt-2">This uses your saved AdS or MuS level and matches you into a 4-player room.</p>
+                    </div>
+                    <Button variant="outline" onClick={backToHome} className="rounded-2xl border-white/20 bg-white/5 text-white hover:bg-white/10">Back</Button>
+                  </div>
+                  <div className="grid md:grid-cols-3 gap-4">
+                    {[
+                      { key: "addsub", title: "Addition / Subtraction", detail: `Uses ${userHistory.addsubLevel}` },
+                      { key: "muldiv", title: "Multiplication / Division", detail: `Uses ${userHistory.muldivLevel}` },
+                      { key: "mixed", title: "Mixed", detail: "Uses your current saved level mix" },
+                    ].map((item) => (
+                      <Card key={item.key} className="bg-slate-900/60 border-white/10 rounded-3xl">
+                        <CardContent className="p-5 space-y-4">
+                          <div className="flex items-center gap-3">
+                            <Users className="w-6 h-6 text-cyan-100" />
+                            <h3 className="text-xl font-bold text-white">{item.title}</h3>
+                          </div>
+                          <p className="text-blue-100/75">{item.detail}</p>
+                          <Button onClick={() => startMultiplayerLobby(item.key)} className="w-full rounded-2xl bg-cyan-500 hover:bg-cyan-400 text-white">Join Room</Button>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          )}
+
+          {screen === "multiplayerWaiting" && multiplayerState && (
+            <motion.div key="multiplayerWaiting" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+              <Card className="bg-white/10 border-white/10 rounded-3xl shadow-2xl">
+                <CardContent className="p-8 md:p-10 text-center space-y-6">
+                  <Users className="w-16 h-16 mx-auto text-cyan-200" />
+                  <div>
+                    <h2 className="text-3xl md:text-4xl font-black">Waiting for players...</h2>
+                    <p className="text-blue-100/80 mt-2">
+                      Room found. {multiplayerState.selectedMode === "addsub"
+                        ? "Addition / Subtraction"
+                        : multiplayerState.selectedMode === "muldiv"
+                        ? "Multiplication / Division"
+                        : "Mixed"}{" "}•{" "}
+                      {typeof multiplayerState.raceLevel === "object"
+                        ? `${multiplayerState.raceLevel.addsubLevel} + ${multiplayerState.raceLevel.muldivLevel}`
+                        : multiplayerState.raceLevel}
+                    </p>
+                  </div>
+                  <div className="text-5xl font-black text-cyan-100">{multiplayerState.waitTimeLeft}s</div>
+                  <div className="grid md:grid-cols-4 gap-4 max-w-4xl mx-auto">
+                    {[
+                      { name: playerName?.trim() || "You", icon: "🙂", joined: true, isSelf: true },
+                      ...multiplayerState.opponents.map((opponent) => ({
+                        name: opponent.name,
+                        icon: opponent.icon,
+                        joined: opponent.joined,
+                        isSelf: false,
+                      })),
+                    ].map((player, index) => (
+                      <motion.div
+                        key={`${player.isSelf ? "self" : player.name}-${index}`}
+                        initial={{ opacity: 0, y: 8, scale: 0.96 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        className={`rounded-3xl border p-4 ${player.joined ? "bg-slate-900/60 border-white/10" : "bg-slate-900/30 border-white/5"}`}
+                      >
+                        {player.joined ? (
+                          <motion.div
+                            initial={{ opacity: 0.2, scale: 0.92 }}
+                            animate={{ opacity: [0.5, 1, 1], scale: [0.92, 1.04, 1] }}
+                            transition={{ duration: 0.45 }}
+                          >
+                            <div className="text-4xl mb-2">{player.icon}</div>
+                            <div className="font-bold text-white">{player.name}</div>
+                            <div className={`text-xs mt-1 ${player.isSelf ? "text-emerald-200" : "text-cyan-200 font-semibold"}`}>
+                              {player.isSelf ? "Joined room" : `${player.name} joined`}
+                            </div>
+                          </motion.div>
+                        ) : (
+                          <div className="py-4">
+                            <div className="h-10 w-10 rounded-full bg-white/10 mx-auto mb-3" />
+                            <div className="h-4 w-24 rounded-full bg-white/10 mx-auto mb-2" />
+                            <div className="text-xs text-blue-100/45">Searching...</div>
+                          </div>
+                        )}
+                      </motion.div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          )}
+
+          {screen === "multiplayerGame" && currentQuestion && multiplayerState && (
+            <motion.div key="multiplayerGame" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-5">
+              <Card className="bg-white/10 border-white/10 rounded-3xl shadow-2xl">
+                <CardContent className="p-5 md:p-6 space-y-5">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <Badge className="bg-cyan-500/20 text-cyan-50 border-none">Multiplayer Race</Badge>
+                    <Badge className="bg-purple-500/20 text-purple-50 border-none">{multiplayerState.selectedMode === "addsub" ? "Addition / Subtraction" : multiplayerState.selectedMode === "muldiv" ? "Multiplication / Division" : "Mixed"}</Badge>
+                    <Badge className="bg-emerald-500/20 text-emerald-50 border-none">First to 30 correct</Badge>
+                    <Badge className="bg-white/10 text-white border-none">
+                      {typeof multiplayerState.raceLevel === "object"
+                        ? `${multiplayerState.raceLevel.addsubLevel} + ${multiplayerState.raceLevel.muldivLevel}`
+                        : `Level ${multiplayerState.raceLevel}`}
+                    </Badge>
+                  </div>
+
+                  <div className="rounded-3xl bg-slate-950/70 border border-white/10 p-5 md:p-6 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-xl md:text-2xl font-bold">Race Track</h3>
+                      <div className="text-sm text-blue-100/70">{multiplayerState.elapsedTime}s elapsed</div>
+                    </div>
+                    {[{ id: "player", name: playerName?.trim() || "You", icon: "🙂", progress: multiplayerState.playerScore, isPlayer: true, burst: feedback === "correct" }, ...multiplayerState.opponents].map((runner) => {
+                      const progress = Math.min(100, (runner.progress / MULTIPLAYER_TARGET_SCORE) * 100);
+                      return (
+                        <div key={runner.id || runner.name} className="space-y-2">
+                          <div className="flex items-center justify-between text-sm">
+                            <div className="flex items-center gap-3">
+                              <span className="text-2xl">{runner.icon}</span>
+                              <span className={`font-bold ${runner.isPlayer ? "text-white" : "text-blue-100/80"}`}>{runner.name}</span>
+                            </div>
+                            <span className="text-blue-100/75">{runner.progress} / {MULTIPLAYER_TARGET_SCORE}</span>
+                          </div>
+                          <div className={`relative h-10 rounded-full ${currentTheme.trackLane} border overflow-hidden`}>
+                            <div className={`absolute inset-y-0 left-0 right-0 ${currentTheme.trackStripe} bg-[length:32px_100%]`} />
+                            <div className="absolute left-3 top-1/2 -translate-y-1/2 text-[10px] uppercase tracking-[0.22em] text-white/45">Start</div>
+                            <div className={`absolute right-0 top-0 h-full w-24 bg-gradient-to-l ${currentTheme.trackFinish}`} />
+                            <motion.div className="absolute top-1/2 -translate-y-1/2 text-2xl" animate={{ left: `calc(${progress}% - 14px)` }} transition={{ type: "tween", duration: 0.35 }}>
+                              {runner.icon}
+                            </motion.div>
+                            {runner.burst && (
+                              <motion.div
+                                initial={{ opacity: 0, scale: 0.7 }}
+                                animate={{ opacity: [0, 1, 0], scale: [0.7, 1.15, 1.3] }}
+                                transition={{ duration: 0.45 }}
+                                className="absolute top-1/2 -translate-y-1/2 text-xs font-black text-emerald-200"
+                                style={{ left: `calc(${progress}% + 8px)` }}
+                              >
+                                +1
+                              </motion.div>
+                            )}
+                            <div className="absolute right-2 top-1/2 -translate-y-1/2 text-xs font-bold text-amber-100">FINISH</div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <div className="grid md:grid-cols-4 gap-4">
+                    <Card className="bg-white/5 border-white/10 rounded-3xl md:col-span-3">
+                      <CardContent className="p-5 md:p-6 space-y-5">
+                        <div className={`rounded-3xl p-8 md:p-12 text-center transition-all duration-200 border ${feedback === "correct" ? "bg-emerald-500/20 ring-2 ring-emerald-400 border-emerald-200/30" : feedback === "incorrect" ? "bg-red-500/20 ring-2 ring-red-400 border-red-200/30" : "bg-slate-950/90 border-blue-200/20"}`}>
+                          <div className="text-sm uppercase tracking-[0.3em] text-blue-100/80 mb-4">Multiplayer Question</div>
+                          <div className="text-5xl md:text-7xl font-black text-white drop-shadow-[0_2px_10px_rgba(255,255,255,0.18)]">{currentQuestion.prompt}</div>
+                        </div>
+                        <form onSubmit={handleSubmit} className="space-y-3 max-w-xl mx-auto">
+                          <Input ref={inputRef} autoFocus value={answer} onChange={(e) => setAnswer(e.target.value)} placeholder="Type answer" className="h-20 rounded-2xl !text-[3rem] md:!text-[3.5rem] leading-none font-black tracking-tight bg-white/12 border-white/20 text-white placeholder:text-white/40 text-center" autoComplete="off" />
+                          <Button type="submit" className="w-full h-12 rounded-2xl bg-cyan-500 hover:bg-cyan-400 text-base font-bold">Submit Answer</Button>
+                        </form>
+                      </CardContent>
+                    </Card>
+                    <Card className="bg-white/5 border-white/10 rounded-3xl">
+                      <CardContent className="p-5 md:p-6 space-y-4">
+                        <div>
+                          <div className="text-sm text-blue-100/70 mb-2">Your correct answers</div>
+                          <div className="text-4xl font-black">{multiplayerState.playerScore}</div>
+                        </div>
+                        <div>
+                          <div className="text-sm text-blue-100/70 mb-2">Race target</div>
+                          <div className="text-2xl font-black">30</div>
+                        </div>
+                        <div className="rounded-2xl bg-slate-900/60 p-4 border border-white/10">
+                          <div className="text-sm text-blue-100/75">Current place</div>
+                          <div className="text-lg font-bold text-white mt-1">#{[multiplayerState.playerScore, ...multiplayerState.opponents.map((o) => o.progress)].sort((a, b) => b - a).indexOf(multiplayerState.playerScore) + 1}</div>
+                        </div>
+                        <div className="rounded-2xl bg-slate-900/60 p-4 border border-white/10">
+                          <div className="text-sm text-blue-100/75">Race reward</div>
+                          <div className="text-lg font-bold text-amber-100 mt-1">{MULTIPLAYER_PLACEMENT_COINS[[multiplayerState.playerScore, ...multiplayerState.opponents.map((o) => o.progress)].sort((a, b) => b - a).indexOf(multiplayerState.playerScore) + 1] || 5} coins</div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          )}
+
+          {screen === "game" && currentQuestion && (
+            <motion.div
+              key="game"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="space-y-5"
+            >
+              <div className="grid md:grid-cols-4 gap-4">
+                <Card className="bg-white/10 border-white/10 rounded-3xl md:col-span-3">
+                  <CardContent className="p-5 md:p-6">
+                    <div className="flex flex-wrap items-center gap-3 mb-4">
+                      <Badge className="bg-blue-500/20 text-blue-50 border-none">{modeMeta[mode]?.title}</Badge>
+                      <Badge className="bg-purple-500/20 text-purple-50 border-none">{typeof level === "object" ? `${level.addsubLevel} + ${level.muldivLevel}` : level}</Badge>
+                      <Badge className="bg-emerald-500/20 text-emerald-50 border-none">Question {currentIndex + 1} / {QUESTIONS_PER_ROUND}</Badge>
+                      {isTestingMode && !pendingTestingExitConfirm && (
+                        <Button type="button" onClick={requestTestingExit} variant="outline" className="ml-auto rounded-2xl border-white/20 bg-white/5 text-white hover:bg-white/10">
+                          Back to Home
+                        </Button>
+                      )}
+                    </div>
+
+                    {isTestingMode && pendingTestingExitConfirm && (
+                      <div className="mb-4 rounded-3xl border border-amber-300/25 bg-amber-400/10 p-4 flex flex-wrap items-center justify-between gap-3">
+                        <div className="text-amber-100 font-semibold">Are you sure? You’re going to forfeit any coins earnt this round.</div>
+                        <div className="flex gap-2">
+                          <Button type="button" onClick={backToHome} className="rounded-2xl bg-amber-500 hover:bg-amber-400 text-white">Yes, go home</Button>
+                          <Button type="button" onClick={cancelTestingExit} variant="outline" className="rounded-2xl border-white/20 bg-white/5 text-white hover:bg-white/10">Keep playing</Button>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="mb-6 space-y-3">
+                      <div className="flex items-center justify-between text-sm text-blue-100/80">
+                        <span>Progress to level up</span>
+                        <span>{results.length} / {QUESTIONS_PER_ROUND} answered</span>
+                      </div>
+                      <div className="relative h-5 rounded-full bg-slate-900/80 border border-white/10 overflow-hidden">
+                        <div
+                          className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-blue-500 to-emerald-400 transition-all duration-300"
+                          style={{ width: `${progressValue}%` }}
+                        />
+                        <div
+                          className="absolute top-0 bottom-0 border-l-2 border-dashed border-yellow-300/90 z-10"
+                          style={{ left: `${GOAL_PROGRESS_PERCENT}%` }}
+                        />
+                        <motion.div
+                          className="absolute top-1/2 -translate-y-1/2 z-20"
+                          animate={{ left: `calc(${timerProgress}% - 10px)` }}
+                          transition={{ type: "tween", duration: 0.25 }}
+                        >
+                          <div className="w-5 h-5 rounded-full bg-white shadow-[0_0_14px_rgba(255,255,255,0.6)] border-2 border-blue-950" />
+                        </motion.div>
+                      </div>
+                      <div className="flex items-center justify-between text-xs text-blue-100/70">
+                        <div className="flex items-center gap-2">
+                          <Flag className="w-3.5 h-3.5 text-yellow-200" />
+                          <span>Goal line: 14 correct</span>
+                        </div>
+                        <span className={paceDelta >= 0 ? "text-emerald-200" : "text-amber-200"}>
+                          {paceDelta >= 0 ? "Ahead of pace" : "Behind pace"}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div
+                      className={`rounded-3xl p-8 md:p-12 text-center transition-all duration-200 border ${
+                        feedback === "correct"
+                          ? "bg-emerald-500/20 ring-2 ring-emerald-400 border-emerald-200/30"
+                          : feedback === "incorrect"
+                          ? "bg-red-500/20 ring-2 ring-red-400 border-red-200/30"
+                          : "bg-slate-950/90 border-blue-200/20"
+                      }`}
+                    >
+                      <div className="text-sm uppercase tracking-[0.3em] text-blue-100/80 mb-4">
+                        {isTestingMode ? `Testing Mode • ${testingState?.phase === "muldiv" ? "Multiplication / Division" : "Addition / Subtraction"}` : "Mental Maths Challenge"}
+                      </div>
+                      <div className="text-5xl md:text-7xl font-black text-white drop-shadow-[0_2px_10px_rgba(255,255,255,0.18)]">{currentQuestion.prompt}</div>
+                    </div>
+
+                    <form onSubmit={handleSubmit} className="mt-5 space-y-3 max-w-xl mx-auto">
+                      <Input
+                        ref={inputRef}
+                        autoFocus
+                        value={answer}
+                        onChange={(e) => setAnswer(e.target.value)}
+                        placeholder="Type answer"
+                        className="h-20 rounded-2xl !text-[3rem] md:!text-[3.5rem] leading-none font-black tracking-tight bg-white/12 border-white/20 text-white placeholder:text-white/40 text-center"
+                        autoComplete="off"
+                      />
+                      <Button type="submit" className={`w-full h-12 rounded-2xl ${currentTheme.primaryButton} text-base font-bold`}>
+                        Submit
+                      </Button>
+                    </form>
+                  </CardContent>
+                </Card>
+
+                <Card className="bg-white/10 border-white/10 rounded-3xl">
+                  <CardContent className="p-5 md:p-6 flex flex-col gap-5 h-full">
+                    <div className="flex items-center gap-3 text-xl font-bold">
+                      <TimerReset className="w-5 h-5" />
+                      {timeLeft}s
+                    </div>
+                    <div>
+                      <div className="text-sm text-blue-100/70 mb-2">Score so far</div>
+                      <div className="text-4xl font-black">{score}</div>
+                      {playerName?.trim() && <div className="text-sm text-blue-100/70 mt-2">Player: <span className="text-white font-semibold">{playerName}</span></div>}
+                    </div>
+                    <div className="rounded-2xl bg-slate-900/60 p-4 border border-white/10 space-y-2 mt-auto">
+                      <div className="text-sm text-blue-100/75">Pacing check</div>
+                      <div className={`text-lg font-bold ${paceDelta >= 0 ? "text-emerald-200" : "text-amber-200"}`}>
+                        {paceDelta >= 0 ? "You are ahead" : "You are behind"}
+                      </div>
+                      <div className="text-sm text-blue-100/70">
+                        Expected by now: {Math.max(0, Math.min(QUESTIONS_PER_ROUND, Math.round(expectedAnsweredByNow)))} questions
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            </motion.div>
+          )}
+
+          {screen === "multiplayerResults" && multiplayerState && (
+            <motion.div key="multiplayerResults" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+              <Card className="bg-white/10 border-white/10 rounded-3xl shadow-2xl">
+                <CardContent className="p-8 md:p-12 text-center space-y-5">
+                  <Rocket className="w-20 h-20 mx-auto text-cyan-200" />
+                  <div className="text-blue-100/70 text-sm uppercase tracking-[0.25em]">Multiplayer Race Complete</div>
+                  <h2 className="text-4xl md:text-5xl font-black text-white drop-shadow-[0_3px_16px_rgba(255,255,255,0.22)]">
+                    {multiplayerState.placement === "win" ? "You Won!" : `${multiplayerState.winner} won the race`}
+                  </h2>
+                  <p className="text-blue-100/80 max-w-2xl mx-auto">The race finished the moment you crossed the line. Race Mode rewards placing only: 1st earns 30 coins, 2nd earns 20, 3rd earns 10, and 4th earns 5.</p>
+                  <div className="flex justify-center gap-3 flex-wrap">
+                    <Badge className="bg-amber-400/20 text-amber-50 border-none text-base px-4 py-2">Coins earned: +{multiplayerState.playerCoinsEarned || 0}</Badge>
+                    <Badge className="bg-emerald-400/20 text-emerald-50 border-none text-base px-4 py-2">Place #{multiplayerState.placementNumber}</Badge>
+                  </div>
+                  <div className="grid md:grid-cols-4 gap-4 max-w-4xl mx-auto text-left">
+                    {[{ id: "you", name: playerName?.trim() || "You", icon: "🙂", progress: multiplayerState.playerScore }, ...multiplayerState.opponents].sort((a, b) => b.progress - a.progress).map((runner, index) => (
+                      <div key={runner.id} className="rounded-3xl bg-slate-900/60 border border-white/10 p-4">
+                        <div className="text-sm text-blue-100/60 mb-2">Place #{index + 1}</div>
+                        <div className="text-3xl mb-2">{runner.icon}</div>
+                        <div className="font-bold text-white">{runner.name}</div>
+                        <div className="text-blue-100/75 mt-1">{runner.progress} correct</div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex justify-center gap-3">
+                    <Button onClick={() => setScreen("multiplayerSelect")} className="rounded-2xl h-12 px-6 bg-cyan-500 hover:bg-cyan-400 text-white font-bold">Play Again</Button>
+                    <Button onClick={backToHome} variant="outline" className="rounded-2xl h-12 px-6 border-white/20 bg-white/5 text-white hover:bg-white/10">Home</Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          )}
+
+          {screen === "results" && (
+            <motion.div
+              key="results"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="space-y-5"
+            >
+              <Card className="bg-white/10 border-white/10 rounded-3xl shadow-2xl overflow-hidden">
+                <CardContent className="p-6 md:p-8">
+                  <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                    <div>
+                      <div className="text-blue-100/70 text-sm mb-2">Round Complete</div>
+                      <h2 className="text-3xl md:text-4xl font-black">{modeMeta[mode]?.title} • {typeof level === "object" ? `${level.addsubLevel} + ${level.muldivLevel}` : level}</h2>
+                      <p className="text-blue-100/80 mt-2">{playerName?.trim() ? `${playerName}, you answered ${score} out of ${results.length} correctly.` : `You answered ${score} out of ${results.length} correctly.`}</p>
+                    </div>
+                    <div className={`rounded-3xl px-6 py-5 ${passed ? "bg-emerald-500/20" : "bg-amber-500/20"}`}>
+                      <div className="text-sm uppercase tracking-[0.25em] text-white/70">Result</div>
+                      <div className="text-3xl font-black mt-1">{passed ? "LEVEL UP" : "Keep Practising"}</div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {roundReward && (
+                <motion.div initial={{ opacity: 0, y: 12, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ duration: 0.35 }}>
+                  <Card className="bg-cyan-500/10 border-cyan-300/20 rounded-3xl shadow-2xl">
+                    <CardContent className="p-6 md:p-8 text-center space-y-4">
+                      <div className="text-sm uppercase tracking-[0.25em] text-cyan-100/70">Coin Reward</div>
+                      <div className="text-4xl md:text-5xl font-black text-cyan-50">+{roundReward.totalCoins} coins</div>
+                      <div className="flex flex-wrap justify-center gap-3 text-sm">
+                        <Badge className="bg-white/10 text-cyan-50 border-none">{roundReward.correctCount} correct = +{roundReward.baseCoins}</Badge>
+                        {roundReward.bonusCoins > 0 && (
+                          <motion.div initial={{ opacity: 0, scale: 0.7 }} animate={{ opacity: 1, scale: [1, 1.12, 1] }} transition={{ duration: 0.6 }}>
+                            <Badge className="bg-amber-400/20 text-amber-50 border-none">Bonus coins +{roundReward.bonusCoins}</Badge>
+                          </motion.div>
+                        )}
+                        {roundReward.testingModeActive && <Badge className="bg-emerald-400/20 text-emerald-50 border-none">Testing mode double coins</Badge>}
+                        {roundReward.activeMode === "mixed" && <Badge className="bg-cyan-400/20 text-cyan-50 border-none">Mixed mode 1.5x coins</Badge>}
+                        {roundReward.levelMatchMultiplier > 1 && <Badge className="bg-emerald-400/20 text-emerald-50 border-none">Current level double coins</Badge>}
+                        {roundReward.boostMultiplier > 1 && <Badge className="bg-fuchsia-400/20 text-fuchsia-50 border-none">Coin multiplier active</Badge>}
+                      </div>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              )}
+
+              {passed ? (
+                <Card className="bg-emerald-500/15 border-emerald-300/20 rounded-3xl">
+                  <CardContent className="p-8 text-center space-y-4">
+                    <motion.div initial={{ scale: 0.9 }} animate={{ scale: [1, 1.05, 1] }} transition={{ repeat: 2, duration: 0.5 }}>
+                      <Trophy className="w-16 h-16 mx-auto text-emerald-200" />
+                    </motion.div>
+                    <h3 className="text-4xl md:text-5xl font-black tracking-wide">LEVEL UP!</h3>
+                    <p className="text-emerald-50/90 max-w-2xl mx-auto">
+                      Amazing work. You reached the level-up score by getting at least 14 correct.
+                    </p>
+                    <div className="flex flex-wrap justify-center gap-3 pt-2">
+                      <Button onClick={restartSameLevel} className="rounded-2xl h-12 px-6 bg-emerald-500 hover:bg-emerald-400 text-white font-bold">
+                        Play Again
+                      </Button>
+                      {score >= 14 && (
+                        <Button onClick={startTestingMode} variant="outline" className="rounded-2xl h-12 px-6 border-emerald-300/30 bg-emerald-400/10 text-emerald-100 hover:bg-emerald-400/20">
+                          Retake Test
+                        </Button>
+                      )}
+                      <Button onClick={backToHome} variant="outline" className="rounded-2xl h-12 px-6 border-white/20 bg-white/5 text-white hover:bg-white/10">
+                        Go Home
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="grid lg:grid-cols-2 gap-5">
+                  <Card className="bg-white/10 border-white/10 rounded-3xl">
+                    <CardContent className="p-6 md:p-8">
+                      <h3 className="text-2xl font-bold text-white mb-4 drop-shadow-[0_2px_8px_rgba(255,255,255,0.12)]">Review your answers</h3>
+                      <div className="space-y-3 max-h-[420px] overflow-auto pr-2">
+                        {results.map((item, i) => (
+                          <div key={i} className="rounded-2xl bg-slate-900/60 p-4 border border-white/5">
+                            <div className="flex items-center justify-between gap-4">
+                              <div className="font-bold text-xl text-white">{item.prompt}</div>
+                              {item.correct ? (
+                                <CheckCircle2 className="w-5 h-5 text-emerald-300 shrink-0" />
+                              ) : (
+                                <XCircle className="w-5 h-5 text-red-300 shrink-0" />
+                              )}
+                            </div>
+                            <div className="text-sm text-white/85 mt-2">
+                              Your answer: <span className="font-bold text-white">{item.given || "No answer"}</span> • Correct answer: <span className="font-bold text-white">{item.expected}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="bg-amber-500/10 border-amber-300/20 rounded-3xl">
+                    <CardContent className="p-6 md:p-8">
+                      <h3 className="text-2xl font-bold text-white mb-4 drop-shadow-[0_2px_8px_rgba(255,255,255,0.12)]">Mental strategy tip</h3>
+                      <div className="space-y-4 max-h-[420px] overflow-auto pr-2">
+                        {incorrectItems.length > 0 ? (
+                          incorrectItems.map((item, i) => (
+                            <div key={i} className="rounded-2xl bg-slate-900/60 p-4 border border-white/5">
+                              <div className="font-bold text-xl text-white mb-1">{item.prompt}</div>
+                              <div className="text-sm text-white/85 mb-2">Correct answer: {item.expected}</div>
+                              <div className="text-sm leading-6 text-amber-50/90">{item.strategy}</div>
+                            </div>
+                          ))
+                        ) : (
+                          <p className="text-white/85">No incorrect responses to review this round.</p>
+                        )}
+                      </div>
+
+                      <div className="flex flex-wrap gap-3 pt-6">
+                        <Button onClick={restartSameLevel} className={`rounded-2xl h-12 px-6 ${currentTheme.primaryButton} text-white font-bold`}>
+                          Try {typeof level === "object" ? `${level.addsubLevel} + ${level.muldivLevel}` : level} Again
+                        </Button>
+                        <Button onClick={backToHome} variant="outline" className="rounded-2xl h-12 px-6 border-white/20 bg-white/5 text-white hover:bg-white/10">
+                          Home
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              )}
+            </motion.div>
+          )}
+
+          {screen === "testingComplete" && (
+            <motion.div
+              key="testingComplete"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+            >
+              <Card className="bg-white/10 border-white/10 rounded-3xl shadow-2xl">
+                <CardContent className="p-8 md:p-12 text-center space-y-5">
+                  <Trophy className="w-20 h-20 mx-auto text-cyan-200" />
+                  {roundReward && <div className="flex justify-center"><Badge className="bg-cyan-400/20 text-cyan-50 border-none">+{roundReward.totalCoins} coins earned</Badge></div>}
+                  <div className="text-blue-100/70 text-sm">Testing complete</div>
+                  <h2 className="text-4xl md:text-5xl font-black">{playerName?.trim() ? `${playerName}'s current levels updated` : "Current levels updated"}</h2>
+                  <p className="text-blue-100/80 max-w-2xl mx-auto">
+                    Testing mode has worked out the student’s current placement and saved it to this device.
+                  </p>
+                  <div className="flex justify-center">
+                    <Badge className="bg-emerald-400/20 text-emerald-50 border-none text-base px-4 py-2">Testing coins earned: +{testingCoinsEarned}</Badge>
+                  </div>
+                  <div className="grid md:grid-cols-2 gap-4 max-w-xl mx-auto text-left">
+                    <div className="rounded-2xl bg-slate-900/60 border border-white/10 px-5 py-4">
+                      <div className="text-sm text-blue-100/70 mb-1">Addition / Subtraction</div>
+                      <div className="text-3xl font-black">{userHistory.addsubLevel}</div>
+                      <div className="text-sm text-cyan-100/80 mt-2">{testingScores.addsubScore !== null ? `${testingScores.addsubScore}/15` : "No test yet"}</div>
+                    </div>
+                    <div className="rounded-2xl bg-slate-900/60 border border-white/10 px-5 py-4">
+                      <div className="text-sm text-blue-100/70 mb-1">Multiplication / Division</div>
+                      <div className="text-3xl font-black">{userHistory.muldivLevel}</div>
+                      <div className="text-sm text-cyan-100/80 mt-2">{testingScores.muldivScore !== null ? `${testingScores.muldivScore}/15` : "No test yet"}</div>
+                    </div>
+                  </div>
+                  {(testingScores.addsubScore >= 14 || testingScores.muldivScore >= 14) && (
+                    <div className="rounded-2xl bg-amber-400/10 border border-amber-300/20 px-5 py-4 max-w-2xl mx-auto text-amber-100">
+                      A very strong test result was recorded. You may want to retake the test to check if the student can place even higher.
+                    </div>
+                  )}
+                  <div className="flex justify-center gap-3 flex-wrap">
+                    {(testingScores.addsubScore >= 14 || testingScores.muldivScore >= 14) && (
+                      <Button onClick={startTestingMode} className={`rounded-2xl h-12 px-6 ${currentTheme.primaryButton} text-white font-bold`}>
+                        Retake Tests
+                      </Button>
+                    )}
+                    <Button onClick={backToHome} variant={testingScores.addsubScore >= 14 || testingScores.muldivScore >= 14 ? "outline" : undefined} className={testingScores.addsubScore >= 14 || testingScores.muldivScore >= 14 ? "rounded-2xl h-12 px-6 border-white/20 bg-white/5 text-white hover:bg-white/10" : `rounded-2xl h-12 px-6 ${currentTheme.primaryButton} text-white font-bold`}>
+                      Back to Home
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          )}
+
+          {screen === "complete" && (
+            <motion.div
+              key="complete"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+            >
+              <Card className="bg-white/10 border-white/10 rounded-3xl shadow-2xl">
+                <CardContent className="p-8 md:p-12 text-center space-y-5">
+                  <Trophy className="w-20 h-20 mx-auto text-yellow-200" />
+                  <h2 className="text-4xl md:text-5xl font-black">Sequence Complete</h2>
+                  <p className="text-blue-100/80 max-w-2xl mx-auto">
+                    You completed all progression levels in this mode. You could now add class leaderboards, student names, or teacher-assigned level tracking.
+                  </p>
+                  <div className="flex justify-center gap-3">
+                    <Button onClick={backToHome} className={`rounded-2xl h-12 px-6 ${currentTheme.primaryButton} text-white font-bold`}>
+                      Back to Home
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </div>
   );
