@@ -7,9 +7,79 @@ import { Input } from "./components/ui/input";
 import { Badge } from "./components/ui/badge";
 import { CheckCircle2, XCircle, TimerReset, Trophy, Calculator, Flag, UserCircle2, ShoppingBag, Check, Palette, Cat, Pencil, Users, Rocket, Sparkles, CircleDollarSign } from "lucide-react";
 
-const ROUND_TIME = 120;
-const QUESTIONS_PER_ROUND = 15;
+function cn(...classes) {
+  return classes.filter(Boolean).join(" ");
+}
+
+function TimeTrialStopwatch({ prompt, timeLeft, totalTime, feedback, countdownLabel }) {
+  const progressRatio = Math.max(0, Math.min(1, timeLeft / Math.max(1, totalTime)));
+  const radius = 128;
+  const circumference = 2 * Math.PI * radius;
+  const dashOffset = circumference * (1 - progressRatio);
+
+  return (
+    <div className="relative mx-auto w-full max-w-[440px] aspect-square">
+      <div className="absolute left-1/2 top-0.5 -translate-x-1/2 w-16 h-7 rounded-t-[14px] rounded-b-[10px] bg-slate-950/96 border border-white/20 shadow-[0_8px_24px_rgba(15,23,42,0.4)]" />
+      <div className="absolute left-1/2 top-5 -translate-x-1/2 w-8 h-4 rounded-full bg-slate-900 border border-white/15" />
+      <div className="absolute inset-[8%] rounded-[48%] border border-white/15 bg-[radial-gradient(circle_at_50%_26%,rgba(125,211,252,0.16),transparent_38%),linear-gradient(180deg,rgba(15,23,42,0.98),rgba(2,6,23,0.96))] shadow-[0_24px_56px_rgba(2,6,23,0.55)]" />
+
+      <svg className="absolute inset-[5%] w-[90%] h-[90%] -rotate-90" viewBox="0 0 300 300" fill="none" aria-hidden="true">
+        <circle cx="150" cy="150" r={radius} stroke="rgba(255,255,255,0.08)" strokeWidth="10" />
+        <circle
+          cx="150"
+          cy="150"
+          r={radius}
+          stroke={feedback === "correct" ? "rgba(74,222,128,0.95)" : feedback === "incorrect" ? "rgba(248,113,113,0.95)" : "rgba(56,189,248,0.98)"}
+          strokeWidth="10"
+          strokeLinecap="round"
+          strokeDasharray={circumference}
+          strokeDashoffset={dashOffset}
+          className="transition-all duration-300"
+        />
+      </svg>
+
+      <div className="absolute left-1/2 top-[12.5%] -translate-x-1/2 rounded-full bg-slate-950/94 border border-white/12 px-3 py-1 text-[11px] font-bold tracking-[0.16em] text-white/90 whitespace-nowrap shadow-[0_6px_18px_rgba(2,6,23,0.45)]">
+        {timeLeft}s left
+      </div>
+
+      <div className="absolute inset-[19%] rounded-full border border-white/10 bg-[radial-gradient(circle_at_50%_35%,rgba(255,255,255,0.06),transparent_52%),linear-gradient(180deg,rgba(15,23,42,0.95),rgba(2,6,23,0.98))] flex items-center justify-center text-center px-6 py-7 md:px-8 md:py-8 overflow-hidden">
+        {countdownLabel ? (
+          <motion.div
+            key={countdownLabel}
+            initial={{ opacity: 0, scale: 0.7 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0 }}
+            className="text-5xl md:text-6xl font-black text-white"
+          >
+            {countdownLabel}
+          </motion.div>
+        ) : (
+          <div className={cn(
+            "w-full max-w-[96%] text-[2.3rem] md:text-[3rem] font-black leading-[1.08] text-white drop-shadow-[0_4px_18px_rgba(255,255,255,0.12)] break-words",
+            feedback === "correct" && "text-emerald-200",
+            feedback === "incorrect" && "text-red-200"
+          )}>
+            {prompt}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+const DEFAULT_ROUND_TIME = 120;
+const DEFAULT_QUESTION_COUNT = 15;
 const PASS_SCORE = 14;
+const PRACTISE_ROUND_OPTIONS = {
+  15: { questionCount: 15, timeLimit: 120, coinMultiplier: 1 },
+  30: { questionCount: 30, timeLimit: 210, coinMultiplier: 1 },
+  50: { questionCount: 50, timeLimit: 360, coinMultiplier: 1 },
+  100: { questionCount: 100, timeLimit: 720, coinMultiplier: 3 },
+};
+
+function getPractisePassScore(questionCount) {
+  return Math.max(14, Math.ceil((Number(questionCount || DEFAULT_QUESTION_COUNT) * 14) / 15));
+}
 const TESTING_PASS_SCORE = 14;
 const TESTING_HOLD_MIN = 4;
 const TESTING_HOLD_MAX = 13;
@@ -19,12 +89,118 @@ const PLAYER_NAME_STORAGE_KEY = "nsw-progressions-power-up-player-name";
 const THEME_STORAGE_KEY = "nsw-progressions-power-up-theme";
 const TESTING_SCORE_STORAGE_KEY = "nsw-progressions-power-up-testing-scores";
 const TESTING_UNLOCK_STORAGE_KEY = "nsw-progressions-power-up-testing-unlock";
+const MULTIPLAYER_BESTS_STORAGE_KEY = "nsw-progressions-power-up-multiplayer-bests";
+const STATS_STORAGE_KEY = "nsw-progressions-power-up-stats-log";
 const BONUS_DISPLAY_MS = 2200;
 const MIXED_MODE_MULTIPLIER = 1.5;
 const MULTIPLAYER_TARGET_SCORE = 30;
 const MULTIPLAYER_WAIT_SECONDS = 10;
 const MULTIPLAYER_PLACEMENT_COINS = { 1: 30, 2: 20, 3: 10, 4: 5 };
 const CURRENT_LEVEL_MATCH_MULTIPLIER = 2;
+const TIME_TRIAL_SECONDS = 60;
+const TIME_TRIAL_QUESTION_BUFFER = 400;
+const TIME_TRIAL_HISTORY_STORAGE_KEY = "nsw-progressions-power-up-time-trial-history";
+const FREE_FALL_HISTORY_STORAGE_KEY = "nsw-progressions-power-up-free-fall-history";
+const TIME_TRIAL_COUNTDOWN_STEPS = ["Ready?", "3", "2", "1", "Go!"];
+const KING_OF_THE_HILL_ROUND_SIZE = 15;
+const KING_OF_THE_HILL_START_SECONDS = 10;
+const KING_OF_THE_HILL_MIN_SECONDS = 2;
+const KING_OF_THE_HILL_INTERMISSION_STEPS = ["Round over", "Faster", "Level up", "New challenger"];
+const TUG_OF_WAR_TOTAL_ROUNDS = 10;
+const TUG_OF_WAR_ROPE_START = 50;
+const TUG_OF_WAR_PLAYER_PULL = 12;
+const TUG_OF_WAR_BASE_AI_PULL = TUG_OF_WAR_PLAYER_PULL;
+const TUG_OF_WAR_AI_PULL_INTERVAL_START = 10000;
+const TUG_OF_WAR_AI_PULL_INTERVAL_MIN = 1000;
+const TUG_OF_WAR_INTRO_MS = 3200;
+const TUG_OF_WAR_ROUND_BUFFER = 240;
+const FREE_FALL_START_LIVES = 3;
+const FREE_FALL_SPECIAL_CHANCE = 0.05;
+const FREE_FALL_FAST_CHANCE = 0.10;
+const FREE_FALL_FAST_DURATION_MULTIPLIER = 0.72;
+const FREE_FALL_SPECIAL_GOLD_MS = 2000;
+const FREE_FALL_BOX_FLASH_MS = 260;
+const FREE_FALL_LANES = [8, 31, 54, 77];
+const TUG_OF_WAR_TEACHERS = [
+  "Teacher 1",
+  "Teacher 2",
+  "Teacher 3",
+  "Teacher 4",
+  "Teacher 5",
+  "Teacher 6",
+  "Teacher 7",
+  "Mrs Dong",
+  "Mr Hawkins",
+  "Mr Herbert",
+];
+
+const TUG_TEACHER_OVERRIDES = {
+  "8": {
+    name: "Mrs Dong",
+    icon: "🐇",
+    backgroundStyle: "bg-[repeating-linear-gradient(180deg,#166534_0px,#166534_36px,#991b1b_36px,#991b1b_72px)]",
+    ringStyle: "ring-4 ring-red-300/85 ring-offset-2 ring-offset-slate-950",
+    ringOverlay: "bg-[conic-gradient(from_0deg,_rgba(248,113,113,0.95),_rgba(52,211,153,0.95),_rgba(127,29,29,0.98),_rgba(248,113,113,0.95))]",
+  },
+  "9": {
+    name: "Mr Hawkins",
+    icon: "🦈",
+    backgroundStyle: "bg-[linear-gradient(180deg,#38bdf8_0%,#38bdf8_42%,#111827_42%,#111827_46%,#f8fafc_46%,#f8fafc_54%,#111827_54%,#111827_58%,#38bdf8_58%,#38bdf8_100%)]",
+    ringStyle: "ring-4 ring-cyan-300/85 ring-offset-2 ring-offset-slate-950",
+    ringOverlay: "bg-[conic-gradient(from_0deg,_rgba(186,230,253,0.95),_rgba(34,211,238,0.95),_rgba(15,23,42,0.98),_rgba(186,230,253,0.95))]",
+  },
+  "10": {
+    name: "Mr Herbert",
+    icon: "👑",
+    backgroundStyle: "bg-[radial-gradient(circle_at_30%_22%,#ffffff_0%,#f8fafc_18%,#e2e8f0_34%,#94a3b8_56%,#334155_78%,#020617_100%)]",
+    ringStyle: "ring-[5px] ring-slate-100/95 ring-offset-2 ring-offset-slate-950 shadow-[0_0_34px_rgba(226,232,240,0.78)]",
+    ringOverlay: "bg-[conic-gradient(from_0deg,_rgba(255,255,255,0.98),_rgba(226,232,240,0.98),_rgba(148,163,184,0.98),_rgba(255,255,255,0.98))]",
+  },
+};
+
+function getTugAIPullInterval(roundNumber) {
+  const intervalMap = {
+    1: 10000,
+    2: 8000,
+    3: 6500,
+    4: 5000,
+    5: 4000,
+    6: 3000,
+    7: 2300,
+    8: 1800,
+    9: 1500,
+    10: 1000,
+  };
+  return intervalMap[Math.max(1, Math.min(10, Number(roundNumber) || 1))] || 1000;
+}
+
+function getTugAIPullAmount(roundNumber) {
+  return TUG_OF_WAR_PLAYER_PULL;
+}
+
+function resolveTugStateAtTime(state, now = Date.now()) {
+  if (!state) return state;
+
+  let nextPullAt = Number(state.nextAIPullAt || now);
+  let ropePosition = Number(state.ropePosition ?? TUG_OF_WAR_ROPE_START);
+  const aiPullAmount = Number(state.aiPullAmount || TUG_OF_WAR_BASE_AI_PULL);
+  const aiPullEveryMs = Number(state.aiPullEveryMs || TUG_OF_WAR_AI_PULL_INTERVAL_START);
+  let changed = false;
+
+  while (now >= nextPullAt) {
+    ropePosition -= aiPullAmount;
+    nextPullAt += aiPullEveryMs;
+    changed = true;
+  }
+
+  if (!changed) return state;
+
+  return {
+    ...state,
+    ropePosition: Math.max(0, ropePosition),
+    nextAIPullAt: nextPullAt,
+  };
+}
 
 const SITE_THEMES = {
   blue: {
@@ -77,6 +253,399 @@ const SITE_THEMES = {
     trackStripe: "bg-[linear-gradient(to_right,rgba(251,191,36,0.16)_0%,rgba(251,191,36,0.16)_8%,transparent_8%,transparent_16%)]",
     trackFinish: "from-yellow-300/25 to-amber-500/10 border-yellow-200/30",
   },
+  billea: {
+    id: "billea",
+    name: "Billea Mode",
+    page: "bg-black",
+    primaryButton: "bg-black hover:bg-zinc-900 border-2 border-white",
+    accentBadge: "bg-white text-black border border-white",
+    trackLane: "bg-black border-white/70",
+    trackStripe: "bg-[linear-gradient(to_right,rgba(255,255,255,0.18)_0%,rgba(255,255,255,0.18)_10%,transparent_10%,transparent_20%)]",
+    trackFinish: "from-white/20 to-white/10 border-white/80",
+  },
+  crimson: {
+    id: "crimson",
+    name: "Crimson Rush",
+    page: "bg-gradient-to-b from-slate-950 via-red-950 to-rose-950",
+    primaryButton: "bg-rose-600 hover:bg-rose-500",
+    accentBadge: "bg-rose-400/20 text-rose-100",
+    trackLane: "bg-rose-950/85 border-rose-300/20",
+    trackStripe: "bg-[linear-gradient(to_right,rgba(251,113,133,0.16)_0%,rgba(251,113,133,0.16)_8%,transparent_8%,transparent_16%)]",
+    trackFinish: "from-rose-300/25 to-red-500/10 border-rose-200/30",
+  },
+  glacier: {
+    id: "glacier",
+    name: "Glacier Pop",
+    page: "bg-gradient-to-b from-slate-950 via-sky-950 to-cyan-950",
+    primaryButton: "bg-sky-500 hover:bg-sky-400",
+    accentBadge: "bg-sky-300/20 text-sky-100",
+    trackLane: "bg-sky-950/85 border-sky-300/20",
+    trackStripe: "bg-[linear-gradient(to_right,rgba(125,211,252,0.18)_0%,rgba(125,211,252,0.18)_8%,transparent_8%,transparent_16%)]",
+    trackFinish: "from-cyan-200/25 to-sky-400/10 border-cyan-100/40",
+  },
+  midnight: {
+    id: "midnight",
+    name: "Midnight Neon",
+    page: "bg-gradient-to-b from-black via-slate-950 to-indigo-950",
+    primaryButton: "bg-fuchsia-600 hover:bg-fuchsia-500",
+    accentBadge: "bg-fuchsia-400/20 text-fuchsia-100",
+    trackLane: "bg-slate-950/90 border-fuchsia-300/20",
+    trackStripe: "bg-[linear-gradient(to_right,rgba(232,121,249,0.16)_0%,rgba(232,121,249,0.16)_8%,transparent_8%,transparent_16%)]",
+    trackFinish: "from-fuchsia-300/25 to-indigo-500/10 border-fuchsia-200/30",
+  },
+  citrus: {
+    id: "citrus",
+    name: "Citrus Flash",
+    page: "bg-gradient-to-b from-slate-950 via-lime-950 to-emerald-950",
+    primaryButton: "bg-lime-500 hover:bg-lime-400",
+    accentBadge: "bg-lime-300/20 text-lime-100",
+    trackLane: "bg-lime-950/85 border-lime-300/20",
+    trackStripe: "bg-[linear-gradient(to_right,rgba(190,242,100,0.16)_0%,rgba(190,242,100,0.16)_8%,transparent_8%,transparent_16%)]",
+    trackFinish: "from-lime-300/25 to-emerald-500/10 border-lime-200/30",
+  },
+  rosequartz: {
+    id: "rosequartz",
+    name: "Rose Quartz",
+    page: "bg-gradient-to-b from-slate-950 via-pink-950 to-purple-950",
+    primaryButton: "bg-pink-500 hover:bg-pink-400",
+    accentBadge: "bg-pink-300/20 text-pink-100",
+    trackLane: "bg-pink-950/85 border-pink-300/20",
+    trackStripe: "bg-[linear-gradient(to_right,rgba(249,168,212,0.18)_0%,rgba(249,168,212,0.18)_8%,transparent_8%,transparent_16%)]",
+    trackFinish: "from-pink-200/25 to-violet-500/10 border-pink-100/40",
+  },
+  storm: {
+    id: "storm",
+    name: "Storm Teal",
+    page: "bg-gradient-to-b from-slate-950 via-teal-950 to-cyan-950",
+    primaryButton: "bg-teal-500 hover:bg-teal-400",
+    accentBadge: "bg-teal-300/20 text-teal-100",
+    trackLane: "bg-teal-950/85 border-teal-300/20",
+    trackStripe: "bg-[linear-gradient(to_right,rgba(45,212,191,0.16)_0%,rgba(45,212,191,0.16)_8%,transparent_8%,transparent_16%)]",
+    trackFinish: "from-teal-200/25 to-cyan-500/10 border-teal-100/40",
+  },
+  rainbow: {
+    id: "rainbow",
+    name: "Rainbow Mode",
+    page: "bg-[linear-gradient(180deg,#0f172a_0%,#4c1d95_16%,#be123c_34%,#ea580c_50%,#ca8a04_66%,#16a34a_82%,#0ea5e9_100%)]",
+    primaryButton: "bg-pink-500 hover:bg-pink-400",
+    accentBadge: "bg-white/20 text-white",
+    trackLane: "bg-slate-950/80 border-pink-200/25",
+    trackStripe: "bg-[linear-gradient(to_right,rgba(244,114,182,0.16)_0%,rgba(250,204,21,0.16)_18%,rgba(74,222,128,0.16)_36%,rgba(56,189,248,0.16)_54%,rgba(167,139,250,0.16)_72%,transparent_72%,transparent_100%)]",
+    trackFinish: "from-pink-300/25 via-yellow-200/20 to-cyan-300/15 border-white/40",
+  },
+  broncos: {
+    id: "broncos",
+    name: "Brisbane Broncos",
+    page: "bg-[repeating-linear-gradient(180deg,#7f1d1d_0px,#7f1d1d_34px,#f59e0b_34px,#f59e0b_56px,#7f1d1d_56px,#7f1d1d_90px)]",
+    primaryButton: "bg-amber-500 hover:bg-amber-400",
+    accentBadge: "bg-amber-300/20 text-amber-100",
+    trackLane: "bg-[repeating-linear-gradient(180deg,#5f1523_0px,#5f1523_30px,#f59e0b_30px,#f59e0b_48px,#5f1523_48px,#5f1523_78px)] border-amber-300/20",
+    trackStripe: "bg-[repeating-linear-gradient(90deg,rgba(255,255,255,0.08)_0px,rgba(255,255,255,0.08)_8px,transparent_8px,transparent_16px)]",
+    trackFinish: "from-amber-300/20 to-red-500/10 border-amber-200/30",
+  },
+  raiders: {
+    id: "raiders",
+    name: "Canberra Raiders",
+    page: "bg-[repeating-linear-gradient(180deg,#14532d_0px,#14532d_34px,#84cc16_34px,#84cc16_54px,#14532d_54px,#14532d_88px)]",
+    primaryButton: "bg-lime-500 hover:bg-lime-400",
+    accentBadge: "bg-lime-300/20 text-lime-100",
+    trackLane: "bg-[repeating-linear-gradient(180deg,#14532d_0px,#14532d_30px,#84cc16_30px,#84cc16_46px,#14532d_46px,#14532d_76px)] border-lime-300/20",
+    trackStripe: "bg-[repeating-linear-gradient(90deg,rgba(255,255,255,0.08)_0px,rgba(255,255,255,0.08)_8px,transparent_8px,transparent_16px)]",
+    trackFinish: "from-lime-300/20 to-emerald-500/10 border-lime-200/30",
+  },
+  bulldogs: {
+    id: "bulldogs",
+    name: "Canterbury-Bankstown Bulldogs",
+    page: "bg-[repeating-linear-gradient(180deg,#1d4ed8_0px,#1d4ed8_34px,#f8fafc_34px,#f8fafc_52px,#1d4ed8_52px,#1d4ed8_86px)]",
+    primaryButton: "bg-sky-500 hover:bg-sky-400",
+    accentBadge: "bg-sky-300/20 text-sky-100",
+    trackLane: "bg-[repeating-linear-gradient(180deg,#1d4ed8_0px,#1d4ed8_30px,#f8fafc_30px,#f8fafc_46px,#1d4ed8_46px,#1d4ed8_76px)] border-sky-300/20",
+    trackStripe: "bg-[repeating-linear-gradient(90deg,rgba(255,255,255,0.12)_0px,rgba(255,255,255,0.12)_8px,transparent_8px,transparent_16px)]",
+    trackFinish: "from-sky-300/20 to-blue-500/10 border-sky-200/30",
+  },
+  sharks: {
+    id: "sharks",
+    name: "Cronulla Sharks",
+    page: "bg-[linear-gradient(180deg,#38bdf8_0%,#38bdf8_42%,#111827_42%,#111827_46%,#f8fafc_46%,#f8fafc_54%,#111827_54%,#111827_58%,#38bdf8_58%,#38bdf8_100%)]",
+    primaryButton: "bg-sky-500 hover:bg-sky-400",
+    accentBadge: "bg-sky-300/20 text-sky-100",
+    trackLane: "bg-[linear-gradient(180deg,#38bdf8_0%,#38bdf8_42%,#111827_42%,#111827_46%,#f8fafc_46%,#f8fafc_54%,#111827_54%,#111827_58%,#38bdf8_58%,#38bdf8_100%)] border-sky-300/20",
+    trackStripe: "bg-[repeating-linear-gradient(90deg,rgba(255,255,255,0.12)_0px,rgba(255,255,255,0.12)_8px,transparent_8px,transparent_16px)]",
+    trackFinish: "from-sky-300/20 to-slate-100/10 border-sky-200/30",
+  },
+  dolphins: {
+    id: "dolphins",
+    name: "Dolphins",
+    page: "bg-[repeating-linear-gradient(180deg,#9f1239_0px,#9f1239_34px,#fb7185_34px,#fb7185_56px,#9f1239_56px,#9f1239_90px)]",
+    primaryButton: "bg-rose-500 hover:bg-rose-400",
+    accentBadge: "bg-rose-300/20 text-rose-100",
+    trackLane: "bg-[repeating-linear-gradient(180deg,#9f1239_0px,#9f1239_30px,#fb7185_30px,#fb7185_48px,#9f1239_48px,#9f1239_78px)] border-rose-300/20",
+    trackStripe: "bg-[repeating-linear-gradient(90deg,rgba(255,255,255,0.08)_0px,rgba(255,255,255,0.08)_8px,transparent_8px,transparent_16px)]",
+    trackFinish: "from-rose-300/20 to-red-500/10 border-rose-200/30",
+  },
+  titans: {
+    id: "titans",
+    name: "Gold Coast Titans",
+    page: "bg-[repeating-linear-gradient(180deg,#082f49_0px,#082f49_30px,#7dd3fc_30px,#7dd3fc_54px,#fde047_54px,#fde047_70px,#082f49_70px,#082f49_100px)]",
+    primaryButton: "bg-sky-400 hover:bg-sky-300 text-slate-950",
+    accentBadge: "bg-sky-300/20 text-sky-100",
+    trackLane: "bg-[repeating-linear-gradient(180deg,#082f49_0px,#082f49_26px,#7dd3fc_26px,#7dd3fc_46px,#fde047_46px,#fde047_60px,#082f49_60px,#082f49_86px)] border-sky-300/20",
+    trackStripe: "bg-[repeating-linear-gradient(90deg,rgba(255,255,255,0.12)_0px,rgba(255,255,255,0.12)_8px,transparent_8px,transparent_16px)]",
+    trackFinish: "from-sky-300/20 to-yellow-300/10 border-sky-200/30",
+  },
+  seaeagles: {
+    id: "seaeagles",
+    name: "Manly Sea Eagles",
+    page: "bg-[linear-gradient(180deg,#7f1d1d_0%,#7f1d1d_44%,#f8fafc_44%,#f8fafc_56%,#7f1d1d_56%,#7f1d1d_100%)]",
+    primaryButton: "bg-rose-600 hover:bg-rose-500",
+    accentBadge: "bg-rose-300/20 text-rose-100",
+    trackLane: "bg-[linear-gradient(180deg,#7f1d1d_0%,#7f1d1d_44%,#f8fafc_44%,#f8fafc_56%,#7f1d1d_56%,#7f1d1d_100%)] border-rose-300/20",
+    trackStripe: "bg-[repeating-linear-gradient(90deg,rgba(255,255,255,0.1)_0px,rgba(255,255,255,0.1)_9px,transparent_9px,transparent_18px)]",
+    trackFinish: "from-slate-100/20 to-rose-500/10 border-rose-200/30",
+  },
+  melbstorm: {
+    id: "melbstorm",
+    name: "Melbourne Storm",
+    page: "bg-[repeating-linear-gradient(180deg,#4c1d95_0px,#4c1d95_34px,#facc15_34px,#facc15_42px,#312e81_42px,#312e81_82px)]",
+    primaryButton: "bg-violet-500 hover:bg-violet-400",
+    accentBadge: "bg-violet-300/20 text-violet-100",
+    trackLane: "bg-[repeating-linear-gradient(180deg,#4c1d95_0px,#4c1d95_30px,#facc15_30px,#facc15_36px,#312e81_36px,#312e81_72px)] border-violet-300/20",
+    trackStripe: "bg-[repeating-linear-gradient(90deg,rgba(255,255,255,0.08)_0px,rgba(255,255,255,0.08)_8px,transparent_8px,transparent_16px)]",
+    trackFinish: "from-violet-300/20 to-yellow-300/10 border-violet-200/30",
+  },
+  knights: {
+    id: "knights",
+    name: "Newcastle Knights",
+    page: "bg-[repeating-linear-gradient(180deg,#7f1d1d_0px,#7f1d1d_24px,#1d4ed8_24px,#1d4ed8_42px,#7f1d1d_42px,#7f1d1d_66px)]",
+    primaryButton: "bg-red-500 hover:bg-red-400",
+    accentBadge: "bg-red-300/20 text-red-100",
+    trackLane: "bg-[repeating-linear-gradient(180deg,#7f1d1d_0px,#7f1d1d_22px,#1d4ed8_22px,#1d4ed8_38px,#7f1d1d_38px,#7f1d1d_60px)] border-red-300/20",
+    trackStripe: "bg-[repeating-linear-gradient(90deg,rgba(255,255,255,0.08)_0px,rgba(255,255,255,0.08)_8px,transparent_8px,transparent_16px)]",
+    trackFinish: "from-red-300/20 to-blue-500/10 border-red-200/30",
+  },
+  warriors: {
+    id: "warriors",
+    name: "New Zealand Warriors",
+    page: "bg-[repeating-linear-gradient(180deg,#111827_0px,#111827_30px,#2563eb_30px,#2563eb_40px,#dc2626_40px,#dc2626_48px,#a3e635_48px,#a3e635_58px,#facc15_58px,#facc15_68px,#111827_68px,#111827_102px)]",
+    primaryButton: "bg-slate-700 hover:bg-slate-600",
+    accentBadge: "bg-lime-300/20 text-lime-100",
+    trackLane: "bg-[repeating-linear-gradient(180deg,#111827_0px,#111827_26px,#2563eb_26px,#2563eb_34px,#dc2626_34px,#dc2626_40px,#a3e635_40px,#a3e635_48px,#facc15_48px,#facc15_56px,#111827_56px,#111827_86px)] border-lime-300/20",
+    trackStripe: "bg-[repeating-linear-gradient(90deg,rgba(255,255,255,0.08)_0px,rgba(255,255,255,0.08)_8px,transparent_8px,transparent_16px)]",
+    trackFinish: "from-lime-300/20 to-blue-500/10 border-lime-200/30",
+  },
+  cowboys: {
+    id: "cowboys",
+    name: "North Queensland Cowboys",
+    page: "bg-[repeating-linear-gradient(180deg,#1e3a8a_0px,#1e3a8a_34px,#facc15_34px,#facc15_56px,#1e3a8a_56px,#1e3a8a_92px)]",
+    primaryButton: "bg-blue-500 hover:bg-blue-400",
+    accentBadge: "bg-blue-300/20 text-blue-100",
+    trackLane: "bg-[repeating-linear-gradient(180deg,#1e3a8a_0px,#1e3a8a_30px,#facc15_30px,#facc15_48px,#1e3a8a_48px,#1e3a8a_80px)] border-blue-300/20",
+    trackStripe: "bg-[repeating-linear-gradient(90deg,rgba(255,255,255,0.08)_0px,rgba(255,255,255,0.08)_8px,transparent_8px,transparent_16px)]",
+    trackFinish: "from-blue-300/20 to-yellow-300/10 border-blue-200/30",
+  },
+  eels: {
+    id: "eels",
+    name: "Parramatta Eels",
+    page: "bg-[repeating-linear-gradient(180deg,#2563eb_0px,#2563eb_34px,#fde047_34px,#fde047_56px,#2563eb_56px,#2563eb_92px)]",
+    primaryButton: "bg-yellow-400 hover:bg-yellow-300 text-slate-950",
+    accentBadge: "bg-yellow-300/20 text-yellow-100",
+    trackLane: "bg-[repeating-linear-gradient(180deg,#2563eb_0px,#2563eb_30px,#fde047_30px,#fde047_48px,#2563eb_48px,#2563eb_80px)] border-yellow-300/20",
+    trackStripe: "bg-[repeating-linear-gradient(90deg,rgba(255,255,255,0.1)_0px,rgba(255,255,255,0.1)_8px,transparent_8px,transparent_16px)]",
+    trackFinish: "from-yellow-300/20 to-blue-500/10 border-yellow-200/30",
+  },
+  panthers: {
+    id: "panthers",
+    name: "Penrith Panthers",
+    page: "bg-[repeating-linear-gradient(180deg,#000000_0px,#000000_36px,#16a34a_36px,#16a34a_42px,#dc2626_42px,#dc2626_48px,#eab308_48px,#eab308_54px,#f8fafc_54px,#f8fafc_60px,#000000_60px,#000000_96px)]",
+    primaryButton: "bg-rose-500 hover:bg-rose-400",
+    accentBadge: "bg-rose-300/20 text-rose-100",
+    trackLane: "bg-[repeating-linear-gradient(180deg,#000000_0px,#000000_30px,#16a34a_30px,#16a34a_35px,#dc2626_35px,#dc2626_40px,#eab308_40px,#eab308_45px,#f8fafc_45px,#f8fafc_50px,#000000_50px,#000000_80px)] border-rose-300/20",
+    trackStripe: "bg-[repeating-linear-gradient(90deg,rgba(255,255,255,0.08)_0px,rgba(255,255,255,0.08)_10px,transparent_10px,transparent_20px)]",
+    trackFinish: "from-slate-100/18 to-rose-500/10 border-rose-200/30",
+  },
+  rabbitohs: {
+    id: "rabbitohs",
+    name: "South Sydney Rabbitohs",
+    page: "bg-[repeating-linear-gradient(180deg,#166534_0px,#166534_34px,#991b1b_34px,#991b1b_68px)]",
+    primaryButton: "bg-emerald-500 hover:bg-emerald-400",
+    accentBadge: "bg-emerald-300/20 text-emerald-100",
+    trackLane: "bg-[repeating-linear-gradient(180deg,#166534_0px,#166534_30px,#991b1b_30px,#991b1b_60px)] border-emerald-300/20",
+    trackStripe: "bg-[repeating-linear-gradient(90deg,rgba(255,255,255,0.1)_0px,rgba(255,255,255,0.1)_8px,transparent_8px,transparent_16px)]",
+    trackFinish: "from-emerald-300/20 to-red-500/10 border-emerald-200/30",
+  },
+  dragons: {
+    id: "dragons",
+    name: "St George Illawarra Dragons",
+    page: "bg-[linear-gradient(180deg,#f8fafc_0%,#f8fafc_44%,#dc2626_44%,#dc2626_58%,#f8fafc_58%,#f8fafc_100%)]",
+    primaryButton: "bg-red-600 hover:bg-red-500",
+    accentBadge: "bg-red-300/20 text-red-100",
+    trackLane: "bg-[linear-gradient(180deg,#f8fafc_0%,#f8fafc_44%,#dc2626_44%,#dc2626_58%,#f8fafc_58%,#f8fafc_100%)] border-red-300/20",
+    trackStripe: "bg-[repeating-linear-gradient(90deg,rgba(255,255,255,0.08)_0px,rgba(255,255,255,0.08)_10px,transparent_10px,transparent_20px)]",
+    trackFinish: "from-red-300/20 to-slate-100/10 border-red-200/30",
+  },
+  roosters: {
+    id: "roosters",
+    name: "Sydney Roosters",
+    page: "bg-[linear-gradient(180deg,#082f49_0%,#082f49_42%,#f8fafc_42%,#f8fafc_46%,#dc2626_46%,#dc2626_50%,#2563eb_50%,#2563eb_54%,#f8fafc_54%,#f8fafc_58%,#082f49_58%,#082f49_100%)]",
+    primaryButton: "bg-red-500 hover:bg-red-400",
+    accentBadge: "bg-red-300/20 text-red-100",
+    trackLane: "bg-[linear-gradient(180deg,#082f49_0%,#082f49_42%,#f8fafc_42%,#f8fafc_46%,#dc2626_46%,#dc2626_50%,#2563eb_50%,#2563eb_54%,#f8fafc_54%,#f8fafc_58%,#082f49_58%,#082f49_100%)] border-red-300/20",
+    trackStripe: "bg-[repeating-linear-gradient(90deg,rgba(255,255,255,0.08)_0px,rgba(255,255,255,0.08)_10px,transparent_10px,transparent_20px)]",
+    trackFinish: "from-red-300/18 to-blue-300/10 border-red-200/30",
+  },
+  tigers: {
+    id: "tigers",
+    name: "Wests Tigers",
+    page: "bg-[repeating-linear-gradient(180deg,#111827_0px,#111827_32px,#f97316_32px,#f97316_56px,#111827_56px,#111827_88px)]",
+    primaryButton: "bg-orange-500 hover:bg-orange-400",
+    accentBadge: "bg-orange-300/20 text-orange-100",
+    trackLane: "bg-[repeating-linear-gradient(180deg,#111827_0px,#111827_28px,#f97316_28px,#f97316_48px,#111827_48px,#111827_76px)] border-orange-300/20",
+    trackStripe: "bg-[repeating-linear-gradient(90deg,rgba(255,255,255,0.08)_0px,rgba(255,255,255,0.08)_8px,transparent_8px,transparent_16px)]",
+    trackFinish: "from-orange-300/20 to-slate-500/10 border-orange-200/30",
+  },
+  matildas: {
+    id: "matildas",
+    name: "Matildas",
+    page: "bg-[repeating-linear-gradient(180deg,#14532d_0px,#14532d_34px,#facc15_34px,#facc15_44px,#166534_44px,#166534_82px)]",
+    primaryButton: "bg-emerald-500 hover:bg-emerald-400",
+    accentBadge: "bg-emerald-300/20 text-emerald-100",
+    trackLane: "bg-[repeating-linear-gradient(180deg,#14532d_0px,#14532d_30px,#facc15_30px,#facc15_38px,#166534_38px,#166534_72px)] border-yellow-300/20",
+    trackStripe: "bg-[repeating-linear-gradient(90deg,rgba(255,255,255,0.08)_0px,rgba(255,255,255,0.08)_8px,transparent_8px,transparent_16px)]",
+    trackFinish: "from-yellow-300/20 to-emerald-500/10 border-yellow-200/30",
+  },
+  swans: {
+    id: "swans",
+    name: "Sydney Swans",
+    page: "bg-[linear-gradient(180deg,#991b1b_0%,#991b1b_44%,#f8fafc_44%,#f8fafc_56%,#991b1b_56%,#991b1b_100%)]",
+    primaryButton: "bg-red-500 hover:bg-red-400",
+    accentBadge: "bg-red-300/20 text-red-100",
+    trackLane: "bg-[linear-gradient(180deg,#991b1b_0%,#991b1b_44%,#f8fafc_44%,#f8fafc_56%,#991b1b_56%,#991b1b_100%)] border-red-300/20",
+    trackStripe: "bg-[repeating-linear-gradient(90deg,rgba(255,255,255,0.08)_0px,rgba(255,255,255,0.08)_8px,transparent_8px,transparent_16px)]",
+    trackFinish: "from-red-300/20 to-slate-100/10 border-white/40",
+  },
+  giants: {
+    id: "giants",
+    name: "GWS Giants",
+    page: "bg-[repeating-linear-gradient(180deg,#1f2937_0px,#1f2937_32px,#ea580c_32px,#ea580c_56px,#1f2937_56px,#1f2937_88px)]",
+    primaryButton: "bg-orange-500 hover:bg-orange-400",
+    accentBadge: "bg-orange-300/20 text-orange-100",
+    trackLane: "bg-[repeating-linear-gradient(180deg,#1f2937_0px,#1f2937_28px,#ea580c_28px,#ea580c_48px,#1f2937_48px,#1f2937_76px)] border-orange-300/20",
+    trackStripe: "bg-[repeating-linear-gradient(90deg,rgba(255,255,255,0.08)_0px,rgba(255,255,255,0.08)_8px,transparent_8px,transparent_16px)]",
+    trackFinish: "from-orange-300/20 to-slate-500/10 border-orange-200/30",
+  },
+  chrono: {
+    id: "chrono",
+    name: "Chrono Circuit",
+    page: "bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.18),transparent_32%),linear-gradient(180deg,#020617_0%,#0f172a_42%,#164e63_100%)]",
+    primaryButton: "bg-cyan-500 hover:bg-cyan-400",
+    accentBadge: "bg-cyan-300/20 text-cyan-100",
+    trackLane: "bg-slate-950/88 border-cyan-300/20",
+    trackStripe: "bg-[repeating-linear-gradient(90deg,rgba(103,232,249,0.14)_0px,rgba(103,232,249,0.14)_8px,transparent_8px,transparent_16px)]",
+    trackFinish: "from-cyan-300/25 to-sky-500/10 border-cyan-200/30",
+  },
+  champion: {
+    id: "champion",
+    name: "Champion Crown",
+    page: "bg-[radial-gradient(circle_at_top,rgba(251,191,36,0.18),transparent_30%),linear-gradient(180deg,#111827_0%,#7f1d1d_46%,#f59e0b_100%)]",
+    primaryButton: "bg-amber-500 hover:bg-amber-400",
+    accentBadge: "bg-amber-300/20 text-amber-100",
+    trackLane: "bg-red-950/85 border-amber-300/20",
+    trackStripe: "bg-[repeating-linear-gradient(90deg,rgba(253,224,71,0.14)_0px,rgba(253,224,71,0.14)_8px,transparent_8px,transparent_16px)]",
+    trackFinish: "from-amber-300/25 to-red-500/10 border-amber-200/30",
+  },
+  streak: {
+    id: "streak",
+    name: "Streak Surge",
+    page: "bg-[radial-gradient(circle_at_top,rgba(74,222,128,0.16),transparent_28%),linear-gradient(180deg,#020617_0%,#052e16_42%,#164e63_100%)]",
+    primaryButton: "bg-emerald-500 hover:bg-emerald-400",
+    accentBadge: "bg-emerald-300/20 text-emerald-100",
+    trackLane: "bg-emerald-950/85 border-emerald-300/20",
+    trackStripe: "bg-[repeating-linear-gradient(90deg,rgba(74,222,128,0.14)_0px,rgba(74,222,128,0.14)_8px,transparent_8px,transparent_16px)]",
+    trackFinish: "from-emerald-300/25 to-cyan-500/10 border-emerald-200/30",
+  },
+  vault: {
+    id: "vault",
+    name: "Vault Glow",
+    page: "bg-[radial-gradient(circle_at_15%_15%,rgba(255,255,255,0.12)_0_2px,transparent_3px),radial-gradient(circle_at_82%_24%,rgba(255,255,255,0.12)_0_2px,transparent_3px),linear-gradient(135deg,#052e16_0%,#14532d_30%,#0f766e_55%,#a16207_80%,#fde68a_100%)]",
+    primaryButton: "bg-emerald-500 hover:bg-emerald-400",
+    accentBadge: "bg-emerald-300/20 text-emerald-100",
+    trackLane: "bg-[linear-gradient(135deg,rgba(5,46,22,0.95),rgba(20,83,45,0.92),rgba(13,148,136,0.88))] border-emerald-300/24",
+    trackStripe: "bg-[repeating-linear-gradient(90deg,rgba(167,243,208,0.14)_0px,rgba(167,243,208,0.14)_8px,transparent_8px,transparent_16px)]",
+    trackFinish: "from-emerald-300/25 to-amber-400/14 border-emerald-200/30",
+  },
+  auroraforge: {
+    id: "auroraforge",
+    name: "Aurora Forge",
+    page: "bg-[radial-gradient(circle_at_20%_20%,rgba(255,255,255,0.12)_0_2px,transparent_3px),radial-gradient(circle_at_78%_18%,rgba(255,255,255,0.1)_0_2px,transparent_3px),linear-gradient(135deg,#0f172a_0%,#164e63_24%,#0f766e_48%,#7c3aed_72%,#f472b6_100%)]",
+    primaryButton: "bg-cyan-500 hover:bg-cyan-400",
+    accentBadge: "bg-cyan-300/20 text-cyan-100",
+    trackLane: "bg-[linear-gradient(135deg,rgba(15,23,42,0.95),rgba(22,78,99,0.92),rgba(124,58,237,0.88))] border-cyan-300/22",
+    trackStripe: "bg-[repeating-linear-gradient(90deg,rgba(125,211,252,0.14)_0px,rgba(125,211,252,0.14)_8px,transparent_8px,transparent_16px)]",
+    trackFinish: "from-cyan-200/25 via-violet-300/18 to-pink-300/14 border-cyan-100/34",
+  },
+  prismaticlegend: {
+    id: "prismaticlegend",
+    name: "Prismatic Legend",
+    page: "bg-[linear-gradient(135deg,#0f172a_0%,#1d4ed8_18%,#14b8a6_36%,#7c3aed_54%,#ec4899_72%,#f59e0b_100%)]",
+    primaryButton: "bg-fuchsia-500 hover:bg-fuchsia-400",
+    accentBadge: "bg-white/18 text-white",
+    trackLane: "bg-[linear-gradient(135deg,rgba(15,23,42,0.96),rgba(29,78,216,0.88),rgba(124,58,237,0.9))] border-white/26",
+    trackStripe: "bg-[repeating-linear-gradient(90deg,rgba(255,255,255,0.14)_0px,rgba(255,255,255,0.14)_8px,transparent_8px,transparent_16px)]",
+    trackFinish: "from-pink-300/24 via-yellow-200/20 to-cyan-300/18 border-white/36",
+  },
+  timesurge: {
+    id: "timesurge",
+    name: "Time Surge",
+    page: "bg-[radial-gradient(circle_at_18%_18%,rgba(255,255,255,0.12)_0_2px,transparent_3px),linear-gradient(135deg,#020617_0%,#155e75_28%,#0ea5e9_56%,#22d3ee_100%)]",
+    primaryButton: "bg-cyan-500 hover:bg-cyan-400",
+    accentBadge: "bg-cyan-300/20 text-cyan-100",
+    trackLane: "bg-[linear-gradient(135deg,rgba(2,6,23,0.96),rgba(21,94,117,0.9),rgba(14,165,233,0.86))] border-cyan-300/24",
+    trackStripe: "bg-[repeating-linear-gradient(90deg,rgba(103,232,249,0.14)_0px,rgba(103,232,249,0.14)_8px,transparent_8px,transparent_16px)]",
+    trackFinish: "from-cyan-200/24 to-sky-300/14 border-cyan-100/34",
+  },
+  quantumcore: {
+    id: "quantumcore",
+    name: "Quantum Core",
+    page: "bg-[radial-gradient(circle_at_22%_18%,rgba(255,255,255,0.12)_0_2px,transparent_3px),linear-gradient(135deg,#020617_0%,#312e81_24%,#7c3aed_52%,#ec4899_100%)]",
+    primaryButton: "bg-violet-500 hover:bg-violet-400",
+    accentBadge: "bg-violet-300/20 text-violet-100",
+    trackLane: "bg-[linear-gradient(135deg,rgba(2,6,23,0.96),rgba(49,46,129,0.9),rgba(124,58,237,0.88))] border-violet-300/24",
+    trackStripe: "bg-[repeating-linear-gradient(90deg,rgba(196,181,253,0.14)_0px,rgba(196,181,253,0.14)_8px,transparent_8px,transparent_16px)]",
+    trackFinish: "from-violet-200/24 to-fuchsia-300/14 border-violet-100/34",
+  },
+  eternalglow: {
+    id: "eternalglow",
+    name: "Eternal Glow",
+    page: "bg-[linear-gradient(135deg,#020617_0%,#0f766e_20%,#1d4ed8_40%,#7c3aed_62%,#ec4899_82%,#f59e0b_100%)]",
+    primaryButton: "bg-white text-slate-950 hover:bg-slate-100",
+    accentBadge: "bg-white/18 text-white",
+    trackLane: "bg-[linear-gradient(135deg,rgba(2,6,23,0.98),rgba(15,118,110,0.9),rgba(124,58,237,0.88),rgba(236,72,153,0.86))] border-white/28",
+    trackStripe: "bg-[repeating-linear-gradient(90deg,rgba(255,255,255,0.16)_0px,rgba(255,255,255,0.16)_8px,transparent_8px,transparent_16px)]",
+    trackFinish: "from-white/26 via-yellow-200/18 to-pink-300/16 border-white/40",
+  },
+};
+
+const SPORT_THEME_MASCOT_NAMES = {
+  broncos: "Broncos",
+  raiders: "Raiders",
+  bulldogs: "Bulldogs",
+  sharks: "Sharks",
+  dolphins: "Dolphins",
+  titans: "Titans",
+  seaeagles: "Sea Eagles",
+  melbstorm: "Storm",
+  knights: "Knights",
+  warriors: "Warriors",
+  cowboys: "Cowboys",
+  eels: "Eels",
+  panthers: "Panthers",
+  rabbitohs: "Rabbitohs",
+  dragons: "Dragons",
+  roosters: "Roosters",
+  tigers: "Tigers",
+  matildas: "Matildas",
+  swans: "Swans",
+  giants: "Giants",
 };
 
 const progressionOrder = {
@@ -838,21 +1407,106 @@ function generateQuestion(mode, level) {
   return generateAddSub("AdS3");
 }
 
-function buildRound(mode, level) {
+function buildRound(mode, level, questionCount = DEFAULT_QUESTION_COUNT) {
   const questions = [];
-  for (let i = 0; i < QUESTIONS_PER_ROUND; i++) {
+  for (let i = 0; i < questionCount; i++) {
     questions.push(generateQuestion(mode, level));
   }
   return questions;
 }
 
-const GOAL_PROGRESS_PERCENT = (PASS_SCORE / QUESTIONS_PER_ROUND) * 100;
+
 
 const SHOP_CATEGORIES = [
   { id: "emoji", label: "Emoji", icon: Cat },
   { id: "background", label: "Background", icon: Palette },
   { id: "ring", label: "Ring", icon: Sparkles },
-  { id: "upgrades", label: "Upgrades", icon: CircleDollarSign },
+  { id: "upgrades", label: "Upgrades and Themes", icon: CircleDollarSign },
+  { id: "achievements", label: "Achievements", icon: Trophy },
+];
+
+const ACHIEVEMENT_SECTION_ORDER = ["upgrades", "emoji", "background", "ring"];
+const ACHIEVEMENT_SECTION_LABELS = {
+  upgrades: "Themes",
+  emoji: "Icons",
+  background: "Backgrounds",
+  ring: "Rings",
+};
+const ACHIEVEMENT_METRIC_SORT_ORDER = {
+  bestTimeTrialScore: 0,
+  bestStreak: 1,
+  raceWins: 2,
+  totalCorrect: 3,
+  coinsEarned: 4,
+  coinsSpent: 5,
+  timeSpentSeconds: 6,
+};
+
+function sortAchievementItems(items) {
+  return [...(items || [])].sort((a, b) => {
+    const metricDelta = (ACHIEVEMENT_METRIC_SORT_ORDER[a?.achievementMetric] ?? 99) - (ACHIEVEMENT_METRIC_SORT_ORDER[b?.achievementMetric] ?? 99);
+    if (metricDelta !== 0) return metricDelta;
+    const thresholdDelta = Number(a?.achievementThreshold || 0) - Number(b?.achievementThreshold || 0);
+    if (thresholdDelta !== 0) return thresholdDelta;
+    return String(a?.name || "").localeCompare(String(b?.name || ""));
+  });
+}
+
+const ACHIEVEMENT_SHOP_ITEMS = [
+  { id: "ach-emoji-10m", category: "emoji", name: "Spark Scout", cost: 0, emoji: "🛼", rarity: "achievement", achievementOnly: true, achievementMetric: "timeSpentSeconds", achievementThreshold: 10 * 60, detail: "Play for 10 minutes total" },
+  { id: "ach-emoji-30m", category: "emoji", name: "Sky Rider", cost: 0, emoji: "🛸", rarity: "achievement", achievementOnly: true, achievementMetric: "timeSpentSeconds", achievementThreshold: 30 * 60, detail: "Play for 30 minutes total" },
+  { id: "ach-emoji-1h", category: "emoji", name: "Neon Dino", cost: 0, emoji: "🦖", rarity: "achievement", achievementOnly: true, achievementMetric: "timeSpentSeconds", achievementThreshold: 60 * 60, detail: "Play for 1 hour total" },
+  { id: "ach-emoji-3h", category: "emoji", name: "Target Master", cost: 0, emoji: "🎯", rarity: "achievement", achievementOnly: true, achievementMetric: "timeSpentSeconds", achievementThreshold: 3 * 60 * 60, detail: "Play for 3 hours total" },
+  { id: "ach-emoji-5h", category: "emoji", name: "Rainbow Rebel", cost: 0, emoji: "🌈", rarity: "achievement", achievementOnly: true, achievementMetric: "timeSpentSeconds", achievementThreshold: 5 * 60 * 60, detail: "Play for 5 hours total" },
+  { id: "ach-emoji-10h", category: "emoji", name: "Brain King", cost: 0, emoji: "🧠", rarity: "achievement", achievementOnly: true, achievementMetric: "timeSpentSeconds", achievementThreshold: 10 * 60 * 60, detail: "Play for 10 hours total" },
+  { id: "ach-emoji-25h", category: "emoji", name: "Midnight Meteor", cost: 0, emoji: "☄️", rarity: "achievement", achievementOnly: true, achievementMetric: "timeSpentSeconds", achievementThreshold: 24 * 60 * 60, detail: "Play for 1 day total" },
+  { id: "ach-emoji-50h", category: "emoji", name: "Galaxy Crown", cost: 0, emoji: "👾", rarity: "achievement", achievementOnly: true, achievementMetric: "timeSpentSeconds", achievementThreshold: 50 * 60 * 60, detail: "Play for 50 hours total" },
+
+  { id: "ach-ring-100", category: "ring", name: "Century Ring", cost: 0, style: "ring-4 ring-cyan-300/90 shadow-[0_0_24px_rgba(125,211,252,0.42)]", achievementOnly: true, achievementMetric: "totalCorrect", achievementThreshold: 100, detail: "Answer 100 questions correctly" },
+  { id: "ach-ring-500", category: "ring", name: "Burst Ring", cost: 0, style: "ring-4 ring-emerald-300/90 shadow-[0_0_26px_rgba(74,222,128,0.44)]", achievementOnly: true, achievementMetric: "totalCorrect", achievementThreshold: 500, detail: "Answer 500 questions correctly" },
+  { id: "ach-ring-1000", category: "ring", name: "Master Ring", cost: 0, style: "ring-4 ring-violet-300/90 shadow-[0_0_28px_rgba(196,181,253,0.46)]", achievementOnly: true, achievementMetric: "totalCorrect", achievementThreshold: 1000, detail: "Answer 1000 questions correctly" },
+  { id: "ach-ring-2500", category: "ring", name: "Galaxy Ring", cost: 0, style: "ring-4 ring-fuchsia-300/90 shadow-[0_0_30px_rgba(232,121,249,0.48)]", achievementOnly: true, achievementMetric: "totalCorrect", achievementThreshold: 2500, detail: "Answer 2500 questions correctly" },
+  { id: "ach-ring-5000", category: "ring", name: "Legend Ring", cost: 0, style: "ring-4 ring-amber-200/95 shadow-[0_0_34px_rgba(251,191,36,0.52)]", achievementOnly: true, achievementMetric: "totalCorrect", achievementThreshold: 5000, detail: "Answer 5000 questions correctly" },
+  { id: "ach-ring-10000", category: "ring", name: "Pulse Nova Ring", cost: 0, style: "ring-4 ring-pink-200/95 shadow-[0_0_38px_rgba(244,114,182,0.58)]", achievementOnly: true, achievementMetric: "totalCorrect", achievementThreshold: 10000, detail: "Answer 10000 questions correctly" },
+  { id: "ach-ring-25000", category: "ring", name: "Eclipse Crown Ring", cost: 0, style: "ring-4 ring-white/95 shadow-[0_0_42px_rgba(255,255,255,0.62)]", achievementOnly: true, achievementMetric: "totalCorrect", achievementThreshold: 25000, detail: "Answer 25000 questions correctly" },
+
+  { id: "ach-bg-earned-500", category: "background", name: "Coin Trail", cost: 0, style: "bg-[linear-gradient(135deg,#1d4ed8_0%,#38bdf8_45%,#f8fafc_100%)]", achievementOnly: true, achievementMetric: "coinsEarned", achievementThreshold: 500, detail: "Earn 500 coins" },
+  { id: "ach-bg-earned-2000", category: "background", name: "Treasure Grid", cost: 0, style: "bg-[linear-gradient(rgba(255,255,255,0.16)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.16)_1px,transparent_1px),linear-gradient(135deg,#0f766e,#22c55e,#facc15)] bg-[length:16px_16px,16px_16px,100%_100%]", achievementOnly: true, achievementMetric: "coinsEarned", achievementThreshold: 2000, detail: "Earn 2000 coins" },
+  { id: "ach-bg-earned-5000", category: "background", name: "Treasure Burst", cost: 0, style: "bg-[radial-gradient(circle_at_30%_30%,#fde68a_0%,#f59e0b_28%,#7c2d12_100%)]", achievementOnly: true, achievementMetric: "coinsEarned", achievementThreshold: 5000, detail: "Earn 5000 coins" },
+  { id: "ach-bg-earned-12000", category: "background", name: "Prism Vault", cost: 0, style: "bg-[radial-gradient(circle_at_20%_20%,rgba(255,255,255,0.14)_0_2px,transparent_3px),radial-gradient(circle_at_80%_28%,rgba(255,255,255,0.12)_0_2px,transparent_3px),linear-gradient(135deg,#1d4ed8_0%,#06b6d4_26%,#7c3aed_54%,#ec4899_78%,#f59e0b_100%)]", achievementOnly: true, achievementMetric: "coinsEarned", achievementThreshold: 12000, detail: "Earn 12000 coins" },
+  { id: "ach-bg-spent-500", category: "background", name: "Collector Check", cost: 0, style: "bg-[linear-gradient(45deg,#0f172a_25%,transparent_25%,transparent_75%,#0f172a_75%,#0f172a),linear-gradient(45deg,#0f172a_25%,transparent_25%,transparent_75%,#0f172a_75%,#0f172a)] bg-[length:18px_18px] bg-[position:0_0,9px_9px] bg-emerald-600", achievementOnly: true, achievementMetric: "coinsSpent", achievementThreshold: 500, detail: "Spend 500 coins in the shop" },
+  { id: "ach-bg-spent-2000", category: "background", name: "Collector Crown", cost: 0, style: "bg-[radial-gradient(circle_at_20%_20%,#ffffff_0_2px,transparent_3px),radial-gradient(circle_at_70%_35%,#ffffff_0_2px,transparent_3px),radial-gradient(circle_at_40%_75%,#ffffff_0_2px,transparent_3px),linear-gradient(135deg,#14532d,#a16207,#facc15)]", achievementOnly: true, achievementMetric: "coinsSpent", achievementThreshold: 2000, detail: "Spend 2000 coins in the shop" },
+  { id: "ach-bg-spent-7500", category: "background", name: "Mythic Collector", cost: 0, style: "bg-[linear-gradient(rgba(255,255,255,0.12)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.12)_1px,transparent_1px),linear-gradient(135deg,#111827_0%,#7c3aed_30%,#0ea5e9_56%,#22c55e_78%,#fde68a_100%)] bg-[length:18px_18px,18px_18px,100%_100%]", achievementOnly: true, achievementMetric: "coinsSpent", achievementThreshold: 7500, detail: "Spend 7500 coins in the shop" },
+
+  { id: "ach-theme-firstwin", category: "upgrades", name: "Victory Theme", cost: 0, detail: "Win your first race", themeId: "champion", permanentUnlock: true, achievementOnly: true, achievementMetric: "raceWins", achievementThreshold: 1 },
+  { id: "ach-theme-race10", category: "upgrades", name: "Champion Theme", cost: 0, detail: "Win 10 races", themeId: "vault", permanentUnlock: true, achievementOnly: true, achievementMetric: "raceWins", achievementThreshold: 10 },
+  { id: "ach-theme-race50", category: "upgrades", name: "Prismatic Legend Theme", cost: 0, detail: "Win 50 races", themeId: "prismaticlegend", permanentUnlock: true, achievementOnly: true, achievementMetric: "raceWins", achievementThreshold: 50 },
+  { id: "ach-theme-tt20", category: "upgrades", name: "Chrono Theme", cost: 0, detail: "Score 20 correct in a Time Trial", themeId: "chrono", permanentUnlock: true, achievementOnly: true, achievementMetric: "bestTimeTrialScore", achievementThreshold: 20 },
+  { id: "ach-theme-tt35", category: "upgrades", name: "Streak Theme", cost: 0, detail: "Score 35 correct in a Time Trial", themeId: "streak", permanentUnlock: true, achievementOnly: true, achievementMetric: "bestTimeTrialScore", achievementThreshold: 35 },
+  { id: "ach-theme-tt45", category: "upgrades", name: "Aurora Forge Theme", cost: 0, detail: "Score 45 correct in a Time Trial", themeId: "auroraforge", permanentUnlock: true, achievementOnly: true, achievementMetric: "bestTimeTrialScore", achievementThreshold: 45 },
+  { id: "ach-theme-tt60", category: "upgrades", name: "Time Surge Theme", cost: 0, detail: "Score 60 correct in a Time Trial", themeId: "timesurge", permanentUnlock: true, achievementOnly: true, achievementMetric: "bestTimeTrialScore", achievementThreshold: 60 },
+  { id: "ach-theme-tt75", category: "upgrades", name: "Quantum Core Theme", cost: 0, detail: "Score 75 correct in a Time Trial", themeId: "quantumcore", permanentUnlock: true, achievementOnly: true, achievementMetric: "bestTimeTrialScore", achievementThreshold: 75 },
+  { id: "ach-theme-tt100", category: "upgrades", name: "Eternal Glow Theme", cost: 0, detail: "Score 100 correct in a Time Trial", themeId: "eternalglow", permanentUnlock: true, achievementOnly: true, achievementMetric: "bestTimeTrialScore", achievementThreshold: 100 },
+  { id: "ach-emoji-100h", category: "emoji", name: "Orbit Master", cost: 0, emoji: "🪐", rarity: "achievement", achievementOnly: true, achievementMetric: "timeSpentSeconds", achievementThreshold: 100 * 60 * 60, detail: "Play for 100 hours total" },
+  { id: "ach-emoji-150h", category: "emoji", name: "Deep Space", cost: 0, emoji: "🌌", rarity: "achievement", achievementOnly: true, achievementMetric: "timeSpentSeconds", achievementThreshold: 168 * 60 * 60, detail: "Play for 1 week total" },
+  { id: "ach-emoji-1month", category: "emoji", name: "Eternal Orbit", cost: 0, emoji: "🌍", rarity: "achievement", achievementOnly: true, achievementMetric: "timeSpentSeconds", achievementThreshold: 720 * 60 * 60, detail: "Play for 1 month total" },
+  { id: "ach-ring-50000", category: "ring", name: "Solar Halo", cost: 0, style: "border-[4px] border-dashed border-cyan-100/95 outline outline-2 outline-offset-[3px] outline-cyan-300/60 shadow-[0_0_34px_rgba(186,230,253,0.55)]", achievementOnly: true, achievementMetric: "totalCorrect", achievementThreshold: 50000, detail: "Answer 50000 questions correctly" },
+  { id: "ach-ring-75000", category: "ring", name: "Infinity Halo", cost: 0, style: "border-[4px] border-double border-white/95 outline outline-2 outline-offset-[4px] outline-fuchsia-300/65 shadow-[0_0_40px_rgba(244,114,182,0.6)]", achievementOnly: true, achievementMetric: "totalCorrect", achievementThreshold: 75000, detail: "Answer 75000 questions correctly" },
+  { id: "ach-bg-earned-24000", category: "background", name: "Vault Nebula", cost: 0, style: "bg-[radial-gradient(circle_at_18%_18%,rgba(255,255,255,0.14)_0_2px,transparent_3px),radial-gradient(circle_at_78%_26%,rgba(255,255,255,0.12)_0_2px,transparent_3px),linear-gradient(135deg,#0f172a_0%,#0ea5e9_28%,#8b5cf6_62%,#f59e0b_100%)]", achievementOnly: true, achievementMetric: "coinsEarned", achievementThreshold: 24000, detail: "Earn 24000 coins" },
+  { id: "ach-bg-earned-36000", category: "background", name: "Mythic Treasury", cost: 0, style: "bg-[linear-gradient(rgba(255,255,255,0.14)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.14)_1px,transparent_1px),linear-gradient(135deg,#020617_0%,#0ea5e9_22%,#10b981_48%,#8b5cf6_74%,#f472b6_100%)] bg-[length:20px_20px,20px_20px,100%_100%]", achievementOnly: true, achievementMetric: "coinsEarned", achievementThreshold: 36000, detail: "Earn 36000 coins" },
+  { id: "ach-bg-spent-15000", category: "background", name: "Collector Prism", cost: 0, style: "bg-[radial-gradient(circle_at_28%_30%,rgba(255,255,255,0.18)_0_2px,transparent_3px),radial-gradient(circle_at_72%_36%,rgba(255,255,255,0.14)_0_2px,transparent_3px),linear-gradient(135deg,#111827_0%,#7c3aed_34%,#0ea5e9_68%,#facc15_100%)]", achievementOnly: true, achievementMetric: "coinsSpent", achievementThreshold: 15000, detail: "Spend 15000 coins in the shop" },
+  { id: "ach-bg-spent-22500", category: "background", name: "Master Collector", cost: 0, style: "bg-[linear-gradient(rgba(255,255,255,0.12)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.12)_1px,transparent_1px),linear-gradient(135deg,#020617_0%,#1d4ed8_20%,#14b8a6_44%,#a855f7_70%,#f59e0b_100%)] bg-[length:18px_18px,18px_18px,100%_100%]", achievementOnly: true, achievementMetric: "coinsSpent", achievementThreshold: 22500, detail: "Spend 22500 coins in the shop" },
+  { id: "ach-emoji-race100", category: "emoji", name: "Victory Meteor", cost: 0, emoji: "🏆", rarity: "achievement", achievementOnly: true, achievementMetric: "raceWins", achievementThreshold: 100, detail: "Win 100 races" },
+  { id: "ach-emoji-race150", category: "emoji", name: "Track Titan", cost: 0, emoji: "🚀", rarity: "achievement", achievementOnly: true, achievementMetric: "raceWins", achievementThreshold: 150, detail: "Win 150 races" },
+  { id: "ach-ring-streak15", category: "ring", name: "Dot Streak", cost: 0, style: "border-[4px] border-dotted border-sky-200/95 shadow-[0_0_22px_rgba(125,211,252,0.4)]", achievementOnly: true, achievementMetric: "bestStreak", achievementThreshold: 15, detail: "Get 15 correct in a row" },
+  { id: "ach-bg-streak30", category: "background", name: "Focus Flow", cost: 0, style: "bg-[linear-gradient(135deg,#052e16_0%,#0f766e_36%,#22c55e_70%,#a7f3d0_100%)]", achievementOnly: true, achievementMetric: "bestStreak", achievementThreshold: 30, detail: "Get 30 correct in a row" },
+  { id: "ach-emoji-streak50", category: "emoji", name: "Hot Hand", cost: 0, emoji: "🔥", rarity: "achievement", achievementOnly: true, achievementMetric: "bestStreak", achievementThreshold: 50, detail: "Get 50 correct in a row" },
+  { id: "ach-ring-streak100", category: "ring", name: "Streak Circuit", cost: 0, style: "border-[4px] border-dashed border-emerald-200/95 shadow-[0_0_26px_rgba(110,231,183,0.45)]", achievementOnly: true, achievementMetric: "bestStreak", achievementThreshold: 100, detail: "Get 100 correct in a row" },
+  { id: "ach-bg-streak150", category: "background", name: "Unbroken Wave", cost: 0, style: "bg-[radial-gradient(circle_at_20%_20%,rgba(255,255,255,0.14)_0_2px,transparent_3px),linear-gradient(135deg,#0f172a_0%,#06b6d4_26%,#8b5cf6_58%,#ec4899_100%)]", achievementOnly: true, achievementMetric: "bestStreak", achievementThreshold: 150, detail: "Get 150 correct in a row" },
+  { id: "ach-emoji-streak200", category: "emoji", name: "Precision Pulse", cost: 0, emoji: "🎯", rarity: "achievement", achievementOnly: true, achievementMetric: "bestStreak", achievementThreshold: 200, detail: "Get 200 correct in a row" },
+  { id: "ach-ring-streak250", category: "ring", name: "Perfect Orbit", cost: 0, style: "border-[4px] border-double border-violet-100/95 outline outline-2 outline-offset-[3px] outline-fuchsia-300/55 shadow-[0_0_34px_rgba(216,180,254,0.58)]", achievementOnly: true, achievementMetric: "bestStreak", achievementThreshold: 250, detail: "Get 250 correct in a row" },
+  { id: "ach-bg-streak500", category: "background", name: "Monolith Current", cost: 0, style: "bg-[linear-gradient(rgba(255,255,255,0.12)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.12)_1px,transparent_1px),linear-gradient(135deg,#020617_0%,#1d4ed8_24%,#14b8a6_48%,#7c3aed_72%,#ec4899_100%)] bg-[length:20px_20px,20px_20px,100%_100%]", achievementOnly: true, achievementMetric: "bestStreak", achievementThreshold: 500, detail: "Get 500 correct in a row" },
+  { id: "ach-emoji-streak1000", category: "emoji", name: "Unbreakable", cost: 0, emoji: "🌟", rarity: "achievement", achievementOnly: true, achievementMetric: "bestStreak", achievementThreshold: 1000, detail: "Get 1000 correct in a row" },
 ];
 
 const PROFILE_SHOP_ITEMS = [
@@ -867,7 +1521,7 @@ const PROFILE_SHOP_ITEMS = [
   { id: "emoji-kangaroo", category: "emoji", name: "Kangaroo", cost: 360, emoji: "🦘", rarity: "common" },
   { id: "emoji-panda", category: "emoji", name: "Panda", cost: 420, emoji: "🐼", rarity: "common" },
   { id: "emoji-owl", category: "emoji", name: "Night Owl", cost: 500, emoji: "🦉", rarity: "uncommon" },
-  { id: "emoji-tiger", category: "emoji", name: "Tiger", cost: 650, emoji: "🐯", rarity: "uncommon" },
+  { id: "emoji-tiger", category: "emoji", name: "Tiger", cost: 650, emoji: "🐅", rarity: "uncommon" },
   { id: "emoji-unicorn", category: "emoji", name: "Unicorn", cost: 800, emoji: "🦄", rarity: "uncommon" },
   { id: "emoji-robot", category: "emoji", name: "Robot", cost: 950, emoji: "🤖", rarity: "uncommon" },
   { id: "emoji-octopus", category: "emoji", name: "Octopus", cost: 1100, emoji: "🐙", rarity: "uncommon" },
@@ -886,6 +1540,47 @@ const PROFILE_SHOP_ITEMS = [
   { id: "emoji-lightning", category: "emoji", name: "Lightning Spirit", cost: 4700, emoji: "⚡", rarity: "legendary" },
   { id: "emoji-crown", category: "emoji", name: "Crowned Legend", cost: 4900, emoji: "👑", rarity: "legendary" },
   { id: "emoji-diamond", category: "emoji", name: "Diamond Icon", cost: 5000, emoji: "💎", rarity: "legendary" },
+  { id: "emoji-lion", category: "emoji", name: "Lion", cost: 2600, emoji: "🦁", rarity: "rare" },
+  { id: "emoji-hamster", category: "emoji", name: "Hamster", cost: 2700, emoji: "🐹", rarity: "rare" },
+  { id: "emoji-whale", category: "emoji", name: "Whale", cost: 2800, emoji: "🐳", rarity: "rare" },
+  { id: "emoji-peacock", category: "emoji", name: "Peacock", cost: 2900, emoji: "🦚", rarity: "rare" },
+  { id: "emoji-sloth", category: "emoji", name: "Sloth", cost: 3000, emoji: "🦥", rarity: "rare" },
+  { id: "emoji-rhino", category: "emoji", name: "Rhino", cost: 3100, emoji: "🦏", rarity: "epic" },
+  { id: "emoji-llama", category: "emoji", name: "Llama", cost: 3200, emoji: "🦙", rarity: "epic" },
+  { id: "emoji-goose", category: "emoji", name: "Goose", cost: 3300, emoji: "🪿", rarity: "epic" },
+  { id: "emoji-swan", category: "emoji", name: "Swan", cost: 3400, emoji: "🕊️", rarity: "epic" },
+  { id: "emoji-parrot", category: "emoji", name: "Parrot", cost: 3500, emoji: "🦜", rarity: "epic" },
+  { id: "emoji-tornado", category: "emoji", name: "Tornado", cost: 3600, emoji: "🌪️", rarity: "epic" },
+  { id: "emoji-soccer", category: "emoji", name: "Football Star", cost: 3700, emoji: "🥅", rarity: "epic" },
+  { id: "emoji-footy", category: "emoji", name: "Footy Fan", cost: 3800, emoji: "🏉", rarity: "epic" },
+  { id: "emoji-wolf", category: "emoji", name: "Wolf", cost: 3900, emoji: "🐺", rarity: "epic" },
+  { id: "emoji-penguin", category: "emoji", name: "Penguin", cost: 4000, emoji: "🐧", rarity: "epic" },
+  { id: "emoji-comet", category: "emoji", name: "Comet", cost: 4200, emoji: "☄️", rarity: "legendary" },
+  { id: "emoji-rainbowstar", category: "emoji", name: "Rainbow Star", cost: 4400, emoji: "🌈", rarity: "legendary" },
+  { id: "emoji-crystalball", category: "emoji", name: "Crystal Ball", cost: 4600, emoji: "🔮", rarity: "legendary" },
+  { id: "emoji-medal", category: "emoji", name: "Gold Medal", cost: 4800, emoji: "🥇", rarity: "legendary" },
+  { id: "emoji-fireball", category: "emoji", name: "Fireball", cost: 5000, emoji: "🔥", rarity: "legendary" },
+
+  { id: "emoji-team-broncos", category: "emoji", name: "Broncos", cost: 2200, emoji: "🐎", rarity: "team" },
+  { id: "emoji-team-raiders", category: "emoji", name: "Raiders", cost: 2200, emoji: "🪖", rarity: "team" },
+  { id: "emoji-team-bulldogs", category: "emoji", name: "Bulldogs", cost: 2200, emoji: "🐶", rarity: "team" },
+  { id: "emoji-team-sharks", category: "emoji", name: "Sharks", cost: 2200, emoji: "🦈", rarity: "team" },
+  { id: "emoji-team-dolphins", category: "emoji", name: "Dolphins", cost: 2200, emoji: "🐬", rarity: "team" },
+  { id: "emoji-team-titans", category: "emoji", name: "Titans", cost: 2200, emoji: "🔱", rarity: "team" },
+  { id: "emoji-team-seaeagles", category: "emoji", name: "Sea Eagles", cost: 2200, emoji: "🦅", rarity: "team" },
+  { id: "emoji-team-melbstorm", category: "emoji", name: "Storm", cost: 2200, emoji: "⛈️", rarity: "team" },
+  { id: "emoji-team-knights", category: "emoji", name: "Knights", cost: 2200, emoji: "🛡️", rarity: "team" },
+  { id: "emoji-team-warriors", category: "emoji", name: "Warriors", cost: 2200, emoji: "⚔️", rarity: "team" },
+  { id: "emoji-team-cowboys", category: "emoji", name: "Cowboys", cost: 2200, emoji: "🤠", rarity: "team" },
+  { id: "emoji-team-eels", category: "emoji", name: "Eels", cost: 2200, emoji: "🐍", rarity: "team" },
+  { id: "emoji-team-panthers", category: "emoji", name: "Panthers", cost: 2200, emoji: "🐆", rarity: "team" },
+  { id: "emoji-team-rabbitohs", category: "emoji", name: "Rabbitohs", cost: 2200, emoji: "🐇", rarity: "team" },
+  { id: "emoji-team-dragons", category: "emoji", name: "Dragons", cost: 2200, emoji: "🐉", rarity: "team" },
+  { id: "emoji-team-roosters", category: "emoji", name: "Roosters", cost: 2200, emoji: "🐓", rarity: "team" },
+  { id: "emoji-team-tigers", category: "emoji", name: "Tigers", cost: 2200, emoji: "🐾", rarity: "team" },
+  { id: "emoji-team-matildas", category: "emoji", name: "Matildas", cost: 2200, emoji: "⚽", rarity: "team" },
+  { id: "emoji-team-swans", category: "emoji", name: "Swans", cost: 2200, emoji: "🦢", rarity: "team" },
+  { id: "emoji-team-giants", category: "emoji", name: "Giants", cost: 2200, emoji: "🗿", rarity: "team" },
 
   { id: "bg-sky", category: "background", name: "Sky", cost: 50, style: "bg-sky-500" },
   { id: "bg-forest", category: "background", name: "Forest", cost: 60, style: "bg-green-600" },
@@ -923,6 +1618,26 @@ const PROFILE_SHOP_ITEMS = [
   { id: "bg-starlight", category: "background", name: "Starlight", cost: 4700, style: "bg-[radial-gradient(circle_at_20%_20%,#ffffff_0_2px,transparent_3px),radial-gradient(circle_at_70%_35%,#ffffff_0_2px,transparent_3px),radial-gradient(circle_at_40%_75%,#ffffff_0_2px,transparent_3px),linear-gradient(135deg,#0f172a,#4338ca,#a21caf)]" },
   { id: "bg-prismatic-grid", category: "background", name: "Prismatic Grid", cost: 4900, style: "bg-[linear-gradient(rgba(255,255,255,0.16)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.16)_1px,transparent_1px),linear-gradient(135deg,#38bdf8,#a78bfa,#f472b6)] bg-[length:18px_18px,18px_18px,100%_100%]" },
   { id: "bg-mythic", category: "background", name: "Mythic Shine", cost: 5000, style: "bg-gradient-to-br from-amber-200 via-white to-sky-300" },
+  { id: "bg-broncos", category: "background", name: "Broncos Stripe", cost: 2200, style: "bg-[repeating-linear-gradient(180deg,#7f1d1d_0px,#7f1d1d_36px,#f59e0b_36px,#f59e0b_60px,#7f1d1d_60px,#7f1d1d_96px)]" },
+  { id: "bg-raiders", category: "background", name: "Raiders Green", cost: 2200, style: "bg-[repeating-linear-gradient(180deg,#14532d_0px,#14532d_36px,#84cc16_36px,#84cc16_58px,#14532d_58px,#14532d_94px)]" },
+  { id: "bg-bulldogs", category: "background", name: "Bulldogs Blue", cost: 2200, style: "bg-[repeating-linear-gradient(180deg,#1d4ed8_0px,#1d4ed8_34px,#f8fafc_34px,#f8fafc_52px,#1d4ed8_52px,#1d4ed8_86px)]" },
+  { id: "bg-sharks", category: "background", name: "Sharks Steel", cost: 2200, style: "bg-[linear-gradient(180deg,#38bdf8_0%,#38bdf8_42%,#111827_42%,#111827_46%,#f8fafc_46%,#f8fafc_54%,#111827_54%,#111827_58%,#38bdf8_58%,#38bdf8_100%)]" },
+  { id: "bg-dolphins", category: "background", name: "Dolphins Wave", cost: 2200, style: "bg-[repeating-linear-gradient(180deg,#9f1239_0px,#9f1239_36px,#fb7185_36px,#fb7185_60px,#9f1239_60px,#9f1239_96px)]" },
+  { id: "bg-titans", category: "background", name: "Titans Coast", cost: 2200, style: "bg-[repeating-linear-gradient(180deg,#082f49_0px,#082f49_32px,#7dd3fc_32px,#7dd3fc_58px,#fde047_58px,#fde047_76px,#082f49_76px,#082f49_108px)]" },
+  { id: "bg-stormclub", category: "background", name: "Storm Club", cost: 2200, style: "bg-[repeating-linear-gradient(180deg,#4c1d95_0px,#4c1d95_34px,#facc15_34px,#facc15_42px,#312e81_42px,#312e81_84px)]" },
+  { id: "bg-knights", category: "background", name: "Knights Clash", cost: 2200, style: "bg-[repeating-linear-gradient(180deg,#7f1d1d_0px,#7f1d1d_24px,#1d4ed8_24px,#1d4ed8_42px,#7f1d1d_42px,#7f1d1d_66px)]" },
+  { id: "bg-warriors", category: "background", name: "Warriors Pulse", cost: 2200, style: "bg-[repeating-linear-gradient(180deg,#111827_0px,#111827_30px,#2563eb_30px,#2563eb_40px,#dc2626_40px,#dc2626_48px,#a3e635_48px,#a3e635_58px,#facc15_58px,#facc15_68px,#111827_68px,#111827_104px)]" },
+  { id: "bg-cowboys", category: "background", name: "Cowboys Gold", cost: 2200, style: "bg-[repeating-linear-gradient(180deg,#1e3a8a_0px,#1e3a8a_36px,#facc15_36px,#facc15_60px,#1e3a8a_60px,#1e3a8a_96px)]" },
+  { id: "bg-eels", category: "background", name: "Eels Split", cost: 2200, style: "bg-[repeating-linear-gradient(180deg,#2563eb_0px,#2563eb_36px,#fde047_36px,#fde047_60px,#2563eb_60px,#2563eb_96px)]" },
+  { id: "bg-panthers", category: "background", name: "Panthers Night", cost: 2200, style: "bg-[repeating-linear-gradient(180deg,#000000_0px,#000000_38px,#16a34a_38px,#16a34a_46px,#dc2626_46px,#dc2626_54px,#eab308_54px,#eab308_62px,#f8fafc_62px,#f8fafc_70px,#000000_70px,#000000_108px)]" },
+  { id: "bg-rabbitohs", category: "background", name: "Rabbitohs Run", cost: 2200, style: "bg-[repeating-linear-gradient(180deg,#166534_0px,#166534_36px,#991b1b_36px,#991b1b_72px)]" },
+  { id: "bg-dragons-v", category: "background", name: "Dragons V", cost: 2200, style: "bg-[linear-gradient(180deg,#f8fafc_0%,#f8fafc_44%,#dc2626_44%,#dc2626_58%,#f8fafc_58%,#f8fafc_100%)]" },
+  { id: "bg-manly-v", category: "background", name: "Manly V", cost: 2200, style: "bg-[linear-gradient(180deg,#7f1d1d_0%,#7f1d1d_44%,#f8fafc_44%,#f8fafc_56%,#7f1d1d_56%,#7f1d1d_100%)]" },
+  { id: "bg-roosters", category: "background", name: "Roosters Flight", cost: 2200, style: "bg-[linear-gradient(180deg,#082f49_0%,#082f49_42%,#f8fafc_42%,#f8fafc_46%,#dc2626_46%,#dc2626_50%,#2563eb_50%,#2563eb_54%,#f8fafc_54%,#f8fafc_58%,#082f49_58%,#082f49_100%)]" },
+  { id: "bg-tigersclub", category: "background", name: "Tigers Clash", cost: 2200, style: "bg-[repeating-linear-gradient(180deg,#111827_0px,#111827_34px,#f97316_34px,#f97316_58px,#111827_58px,#111827_92px)]" },
+  { id: "bg-matildas", category: "background", name: "Matildas Gold", cost: 2200, style: "bg-[repeating-linear-gradient(180deg,#14532d_0px,#14532d_34px,#facc15_34px,#facc15_46px,#166534_46px,#166534_88px)]" },
+  { id: "bg-swans", category: "background", name: "Swans Red", cost: 2200, style: "bg-[linear-gradient(180deg,#991b1b_0%,#991b1b_44%,#f8fafc_44%,#f8fafc_56%,#991b1b_56%,#991b1b_100%)]" },
+  { id: "bg-giants", category: "background", name: "Giants Orange", cost: 2200, style: "bg-[repeating-linear-gradient(180deg,#1f2937_0px,#1f2937_34px,#ea580c_34px,#ea580c_58px,#1f2937_58px,#1f2937_94px)]" },
 
   { id: "ring-moss", category: "ring", name: "Moss Ring", cost: 80, style: "ring-4 ring-green-400/80" },
   { id: "ring-sky", category: "ring", name: "Sky Ring", cost: 100, style: "ring-4 ring-sky-400/80" },
@@ -941,13 +1656,77 @@ const PROFILE_SHOP_ITEMS = [
   { id: "ring-prism", category: "ring", name: "Prism Ring", cost: 4200, style: "ring-4 ring-sky-200/90 shadow-[0_0_30px_rgba(125,211,252,0.5)]" },
   { id: "ring-eclipse", category: "ring", name: "Eclipse Ring", cost: 4600, style: "ring-4 ring-fuchsia-200/90 shadow-[0_0_34px_rgba(244,114,182,0.5)]" },
   { id: "ring-crownfire", category: "ring", name: "Crownfire Ring", cost: 5000, style: "ring-4 ring-amber-200/95 shadow-[0_0_38px_rgba(253,224,71,0.82)]" },
+  { id: "ring-candy-stripe", category: "ring", name: "Candy Stripe", cost: 900, style: "ring-4 ring-pink-300/90 bg-[repeating-linear-gradient(135deg,rgba(249,168,212,0.95)_0px,rgba(249,168,212,0.95)_4px,rgba(244,114,182,0.22)_4px,rgba(244,114,182,0.22)_8px)] shadow-[0_0_22px_rgba(244,114,182,0.36)]" },
+  { id: "ring-ocean-stripe", category: "ring", name: "Ocean Stripe", cost: 1050, style: "ring-4 ring-cyan-300/90 bg-[repeating-linear-gradient(135deg,rgba(103,232,249,0.95)_0px,rgba(103,232,249,0.95)_4px,rgba(34,211,238,0.2)_4px,rgba(34,211,238,0.2)_9px)] shadow-[0_0_22px_rgba(34,211,238,0.38)]" },
+  { id: "ring-lime-zigzag", category: "ring", name: "Lime Zigzag", cost: 1150, style: "ring-4 ring-lime-300/90 bg-[repeating-linear-gradient(45deg,rgba(190,242,100,0.9)_0px,rgba(190,242,100,0.9)_6px,rgba(101,163,13,0.22)_6px,rgba(101,163,13,0.22)_12px)] shadow-[0_0_22px_rgba(190,242,100,0.34)]" },
+  { id: "ring-violet-swirl", category: "ring", name: "Violet Swirl", cost: 1300, style: "ring-4 ring-violet-300/90 bg-[radial-gradient(circle_at_30%_30%,rgba(233,213,255,0.95)_0px,rgba(233,213,255,0.95)_12%,rgba(139,92,246,0.18)_28%,transparent_44%),radial-gradient(circle_at_70%_65%,rgba(216,180,254,0.95)_0px,rgba(216,180,254,0.95)_10%,rgba(109,40,217,0.2)_24%,transparent_42%)] shadow-[0_0_24px_rgba(196,181,253,0.42)]" },
+  { id: "ring-sunset-wave", category: "ring", name: "Sunset Wave", cost: 1450, style: "ring-4 ring-orange-300/90 bg-[linear-gradient(135deg,rgba(253,186,116,0.95)_0%,rgba(251,146,60,0.95)_35%,rgba(244,114,182,0.45)_100%)] shadow-[0_0_24px_rgba(251,146,60,0.42)]" },
+  { id: "ring-emerald-curve", category: "ring", name: "Emerald Curve", cost: 1600, style: "ring-4 ring-emerald-300/90 bg-[radial-gradient(circle_at_20%_20%,rgba(167,243,208,0.95)_0px,rgba(167,243,208,0.95)_10%,rgba(16,185,129,0.18)_28%,transparent_44%),linear-gradient(135deg,rgba(16,185,129,0.9),rgba(13,148,136,0.24))] shadow-[0_0_24px_rgba(52,211,153,0.38)]" },
+  { id: "ring-starlight-grid", category: "ring", name: "Starlight Grid", cost: 1750, style: "ring-4 ring-sky-200/90 bg-[linear-gradient(rgba(255,255,255,0.18)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.18)_1px,transparent_1px),linear-gradient(135deg,rgba(56,189,248,0.9),rgba(14,165,233,0.25))] bg-[length:10px_10px,10px_10px,100%_100%] shadow-[0_0_24px_rgba(125,211,252,0.42)]" },
+  { id: "ring-royal-curves", category: "ring", name: "Royal Curves", cost: 1950, style: "ring-4 ring-indigo-200/90 bg-[radial-gradient(circle_at_25%_30%,rgba(199,210,254,0.95)_0px,rgba(199,210,254,0.95)_10%,rgba(99,102,241,0.22)_28%,transparent_46%),radial-gradient(circle_at_75%_70%,rgba(224,231,255,0.95)_0px,rgba(224,231,255,0.95)_10%,rgba(79,70,229,0.18)_24%,transparent_42%)] shadow-[0_0_28px_rgba(165,180,252,0.44)]" },
+  { id: "ring-rose-ripple", category: "ring", name: "Rose Ripple", cost: 2150, style: "ring-4 ring-rose-200/90 bg-[radial-gradient(circle,rgba(255,228,230,0.95)_0%,rgba(251,113,133,0.22)_24%,transparent_48%),radial-gradient(circle_at_65%_35%,rgba(255,228,230,0.9)_0%,rgba(244,63,94,0.22)_18%,transparent_38%)] shadow-[0_0_26px_rgba(251,113,133,0.44)]" },
+  { id: "ring-neon-lines", category: "ring", name: "Neon Lines", cost: 2400, style: "ring-4 ring-cyan-100/90 bg-[repeating-linear-gradient(90deg,rgba(34,211,238,0.95)_0px,rgba(34,211,238,0.95)_2px,rgba(232,121,249,0.16)_2px,rgba(232,121,249,0.16)_6px)] shadow-[0_0_30px_rgba(34,211,238,0.45)]" },
+  { id: "ring-opal-swish", category: "ring", name: "Opal Swish", cost: 2750, style: "ring-4 ring-white/90 bg-[linear-gradient(135deg,rgba(255,255,255,0.95)_0%,rgba(186,230,253,0.7)_30%,rgba(233,213,255,0.62)_65%,rgba(254,205,211,0.7)_100%)] shadow-[0_0_28px_rgba(255,255,255,0.45)]" },
+  { id: "ring-gold-scroll", category: "ring", name: "Gold Scroll", cost: 3200, style: "ring-4 ring-amber-100/95 bg-[radial-gradient(circle_at_25%_25%,rgba(254,240,138,0.95)_0px,rgba(254,240,138,0.95)_10%,rgba(234,179,8,0.18)_24%,transparent_42%),linear-gradient(135deg,rgba(251,191,36,0.92),rgba(146,64,14,0.24))] shadow-[0_0_30px_rgba(251,191,36,0.46)]" },
+  { id: "ring-aurora-ribbon", category: "ring", name: "Aurora Ribbon", cost: 3650, style: "ring-4 ring-teal-100/95 bg-[linear-gradient(135deg,rgba(110,231,183,0.95)_0%,rgba(34,211,238,0.7)_45%,rgba(129,140,248,0.55)_100%)] shadow-[0_0_32px_rgba(45,212,191,0.48)]" },
+  { id: "ring-heartburst", category: "ring", name: "Heartburst", cost: 1800, style: "ring-4 ring-rose-300/90 shadow-[0_0_24px_rgba(251,113,133,0.4)]" },
+  { id: "ring-starshine", category: "ring", name: "Starshine", cost: 1900, style: "ring-4 ring-yellow-300/90 shadow-[0_0_24px_rgba(253,224,71,0.42)]" },
+  { id: "ring-dot-pop", category: "ring", name: "Dot Pop", cost: 2000, style: "ring-4 ring-sky-300/90 shadow-[0_0_24px_rgba(125,211,252,0.42)]" },
+  { id: "ring-boltline", category: "ring", name: "Boltline", cost: 2100, style: "ring-4 ring-amber-300/90 shadow-[0_0_24px_rgba(251,191,36,0.42)]" },
+  { id: "ring-petal", category: "ring", name: "Petal Ring", cost: 2200, style: "ring-4 ring-pink-300/90 shadow-[0_0_26px_rgba(244,114,182,0.4)]" },
+  { id: "ring-seaeagle", category: "ring", name: "Sea Eagle Ring", cost: 2300, style: "ring-4 ring-rose-700/90 shadow-[0_0_26px_rgba(190,24,93,0.44)]" },
+  { id: "ring-raider", category: "ring", name: "Raider Ring", cost: 2400, style: "ring-4 ring-lime-400/90 shadow-[0_0_26px_rgba(163,230,53,0.44)]" },
+  { id: "ring-bronco", category: "ring", name: "Bronco Ring", cost: 2500, style: "ring-4 ring-amber-400/90 shadow-[0_0_26px_rgba(251,191,36,0.44)]" },
+  { id: "ring-sharkfin", category: "ring", name: "Shark Fin", cost: 2600, style: "ring-4 ring-cyan-300/90 shadow-[0_0_28px_rgba(34,211,238,0.46)]" },
+  { id: "ring-stormpulse", category: "ring", name: "Storm Pulse", cost: 2700, style: "ring-4 ring-violet-300/90 shadow-[0_0_28px_rgba(167,139,250,0.46)]" },
+  { id: "ring-footyfire", category: "ring", name: "Footy Fire", cost: 2800, style: "ring-4 ring-orange-400/90 shadow-[0_0_28px_rgba(251,146,60,0.46)]" },
+  { id: "ring-matildaspark", category: "ring", name: "Matilda Spark", cost: 2900, style: "ring-4 ring-emerald-300/90 shadow-[0_0_28px_rgba(74,222,128,0.46)]" },
+  { id: "ring-swanwing", category: "ring", name: "Swan Wing", cost: 3000, style: "ring-4 ring-red-300/90 shadow-[0_0_28px_rgba(248,113,113,0.46)]" },
+  { id: "ring-giantglow", category: "ring", name: "Giant Glow", cost: 3150, style: "ring-4 ring-orange-300/90 shadow-[0_0_28px_rgba(251,146,60,0.48)]" },
+  { id: "ring-crystalstars", category: "ring", name: "Crystal Stars", cost: 3300, style: "ring-4 ring-white/90 shadow-[0_0_30px_rgba(255,255,255,0.5)]" },
+  { id: "ring-rainbowhearts", category: "ring", name: "Rainbow Hearts", cost: 3500, style: "ring-4 ring-pink-300/90 shadow-[0_0_30px_rgba(244,114,182,0.5)]" },
+  { id: "ring-cometcrown", category: "ring", name: "Comet Crown", cost: 3700, style: "ring-4 ring-sky-200/90 shadow-[0_0_32px_rgba(125,211,252,0.5)]" },
+  { id: "ring-candystars", category: "ring", name: "Candy Stars", cost: 3900, style: "ring-4 ring-fuchsia-300/90 shadow-[0_0_32px_rgba(217,70,239,0.5)]" },
+  { id: "ring-mythichearts", category: "ring", name: "Mythic Hearts", cost: 4200, style: "ring-4 ring-amber-200/95 shadow-[0_0_34px_rgba(251,191,36,0.54)]" },
+  { id: "ring-legendstars", category: "ring", name: "Legend Stars", cost: 4600, style: "ring-4 ring-cyan-100/95 shadow-[0_0_36px_rgba(186,230,253,0.56)]" },
 
   { id: "upgrade-coin-boost", category: "upgrades", name: "Double Coins Boost", cost: 200, detail: "Double all coins for 20 minutes", boostType: "coinMultiplier2x", durationMs: 20 * 60 * 1000 },
+  { id: "upgrade-triple-boost", category: "upgrades", name: "Triple Coins Boost", cost: 500, detail: "Triple all coins for 15 minutes", boostType: "coinMultiplier3x", durationMs: 15 * 60 * 1000 },
+  { id: "upgrade-quad-boost", category: "upgrades", name: "Quad Coins Boost", cost: 750, detail: "Quadruple all coins for 12 minutes", boostType: "coinMultiplier4x", durationMs: 12 * 60 * 1000 },
   { id: "theme-blue", category: "upgrades", name: "Beresford Blue", cost: 0, detail: "Permanent site theme", themeId: "blue", permanentUnlock: true },
+  { id: "theme-billea", category: "upgrades", name: "Billea Mode", cost: 0, detail: "Bold, cool, and extra clear", themeId: "billea", permanentUnlock: true },
   { id: "theme-emerald", category: "upgrades", name: "Emerald Glow", cost: 600, detail: "Permanent site theme", themeId: "emerald", permanentUnlock: true },
   { id: "theme-sunset", category: "upgrades", name: "Sunset Burst", cost: 800, detail: "Permanent site theme", themeId: "sunset", permanentUnlock: true },
   { id: "theme-violet", category: "upgrades", name: "Violet Storm", cost: 900, detail: "Permanent site theme", themeId: "violet", permanentUnlock: true },
   { id: "theme-gold", category: "upgrades", name: "Golden Hour", cost: 1200, detail: "Permanent site theme", themeId: "gold", permanentUnlock: true },
+  { id: "theme-crimson", category: "upgrades", name: "Crimson Rush", cost: 1000, detail: "Permanent site theme", themeId: "crimson", permanentUnlock: true },
+  { id: "theme-glacier", category: "upgrades", name: "Glacier Pop", cost: 1150, detail: "Permanent site theme", themeId: "glacier", permanentUnlock: true },
+  { id: "theme-midnight", category: "upgrades", name: "Midnight Neon", cost: 1350, detail: "Permanent site theme", themeId: "midnight", permanentUnlock: true },
+  { id: "theme-citrus", category: "upgrades", name: "Citrus Flash", cost: 1450, detail: "Permanent site theme", themeId: "citrus", permanentUnlock: true },
+  { id: "theme-rosequartz", category: "upgrades", name: "Rose Quartz", cost: 1650, detail: "Permanent site theme", themeId: "rosequartz", permanentUnlock: true },
+  { id: "theme-storm", category: "upgrades", name: "Storm Teal", cost: 1800, detail: "Permanent site theme", themeId: "storm", permanentUnlock: true },
+  { id: "theme-rainbow", category: "upgrades", name: "Rainbow Mode", cost: 3000, detail: "Permanent site theme", themeId: "rainbow", permanentUnlock: true },
+  { id: "theme-broncos", category: "upgrades", name: "Brisbane Broncos", cost: 2200, detail: "Permanent team theme", themeId: "broncos", permanentUnlock: true },
+  { id: "theme-raiders", category: "upgrades", name: "Canberra Raiders", cost: 2200, detail: "Permanent team theme", themeId: "raiders", permanentUnlock: true },
+  { id: "theme-bulldogs", category: "upgrades", name: "Canterbury-Bankstown Bulldogs", cost: 2200, detail: "Permanent team theme", themeId: "bulldogs", permanentUnlock: true },
+  { id: "theme-sharks", category: "upgrades", name: "Cronulla Sharks", cost: 2200, detail: "Permanent team theme", themeId: "sharks", permanentUnlock: true },
+  { id: "theme-dolphins", category: "upgrades", name: "Dolphins", cost: 2200, detail: "Permanent team theme", themeId: "dolphins", permanentUnlock: true },
+  { id: "theme-titans", category: "upgrades", name: "Gold Coast Titans", cost: 2200, detail: "Permanent team theme", themeId: "titans", permanentUnlock: true },
+  { id: "theme-seaeagles", category: "upgrades", name: "Manly Sea Eagles", cost: 2200, detail: "Permanent team theme", themeId: "seaeagles", permanentUnlock: true },
+  { id: "theme-melbstorm", category: "upgrades", name: "Melbourne Storm", cost: 2200, detail: "Permanent team theme", themeId: "melbstorm", permanentUnlock: true },
+  { id: "theme-knights", category: "upgrades", name: "Newcastle Knights", cost: 2200, detail: "Permanent team theme", themeId: "knights", permanentUnlock: true },
+  { id: "theme-warriors", category: "upgrades", name: "New Zealand Warriors", cost: 2200, detail: "Permanent team theme", themeId: "warriors", permanentUnlock: true },
+  { id: "theme-cowboys", category: "upgrades", name: "North Queensland Cowboys", cost: 2200, detail: "Permanent team theme", themeId: "cowboys", permanentUnlock: true },
+  { id: "theme-eels", category: "upgrades", name: "Parramatta Eels", cost: 2200, detail: "Permanent team theme", themeId: "eels", permanentUnlock: true },
+  { id: "theme-panthers", category: "upgrades", name: "Penrith Panthers", cost: 2200, detail: "Permanent team theme", themeId: "panthers", permanentUnlock: true },
+  { id: "theme-rabbitohs", category: "upgrades", name: "South Sydney Rabbitohs", cost: 2200, detail: "Permanent team theme", themeId: "rabbitohs", permanentUnlock: true },
+  { id: "theme-dragons", category: "upgrades", name: "St George Illawarra Dragons", cost: 2200, detail: "Permanent team theme", themeId: "dragons", permanentUnlock: true },
+  { id: "theme-roosters", category: "upgrades", name: "Sydney Roosters", cost: 2200, detail: "Permanent team theme", themeId: "roosters", permanentUnlock: true },
+  { id: "theme-tigers", category: "upgrades", name: "Wests Tigers", cost: 2200, detail: "Permanent team theme", themeId: "tigers", permanentUnlock: true },
+  { id: "theme-matildas", category: "upgrades", name: "Matildas", cost: 2400, detail: "Permanent team theme", themeId: "matildas", permanentUnlock: true },
+  { id: "theme-swans", category: "upgrades", name: "Sydney Swans", cost: 2400, detail: "Permanent team theme", themeId: "swans", permanentUnlock: true },
+  { id: "theme-giants", category: "upgrades", name: "GWS Giants", cost: 2400, detail: "Permanent team theme", themeId: "giants", permanentUnlock: true },
+  ...ACHIEVEMENT_SHOP_ITEMS,
 ];
 
 const SHOP_PREVIEW_ITEMS = {};
@@ -1153,6 +1932,289 @@ function writeThemeId(themeId) {
   window.localStorage.setItem(THEME_STORAGE_KEY, themeId);
 }
 
+function getMultiplayerRaceKey(selectedMode, raceLevel) {
+  if (selectedMode === "mixed" && raceLevel && typeof raceLevel === "object") {
+    return `mixed:${raceLevel.addsubLevel}+${raceLevel.muldivLevel}`;
+  }
+  return `${selectedMode}:${String(raceLevel)}`;
+}
+
+function readMultiplayerBests() {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = window.localStorage.getItem(MULTIPLAYER_BESTS_STORAGE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeMultiplayerBests(bests) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(MULTIPLAYER_BESTS_STORAGE_KEY, JSON.stringify(bests));
+}
+
+function readTimeTrialHistory() {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(TIME_TRIAL_HISTORY_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeTimeTrialHistory(history) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(TIME_TRIAL_HISTORY_STORAGE_KEY, JSON.stringify(history));
+}
+
+function readFreeFallHistory() {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(FREE_FALL_HISTORY_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeFreeFallHistory(history) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(FREE_FALL_HISTORY_STORAGE_KEY, JSON.stringify(history));
+}
+
+function recordFreeFallHistoryEntry(entry) {
+  const history = readFreeFallHistory();
+  const nextHistory = [...history, { ...entry, ts: entry.ts || Date.now() }]
+    .sort((a, b) => Number(b.ts || 0) - Number(a.ts || 0))
+    .slice(0, 250);
+  writeFreeFallHistory(nextHistory);
+}
+
+function recordTimeTrialHistoryEntry(entry) {
+  const history = readTimeTrialHistory();
+  const nextHistory = [...history, { ...entry, ts: entry.ts || Date.now() }]
+    .sort((a, b) => Number(b.ts || 0) - Number(a.ts || 0))
+    .slice(0, 250);
+  writeTimeTrialHistory(nextHistory);
+}
+
+function getTimeTrialLevelLabel(selectedMode, selectedLevel) {
+  if (selectedMode === "mixed" && selectedLevel && typeof selectedLevel === "object") {
+    return `${selectedLevel.addsubLevel} + ${selectedLevel.muldivLevel}`;
+  }
+  return String(selectedLevel || "");
+}
+
+function getTimeTrialLeaderboardEntries(history, selectedMode, levelLabel) {
+  const entries = Array.isArray(history) ? history : [];
+  const scoped = entries.filter((entry) => entry.selectedMode === selectedMode);
+  const sorter = (a, b) => {
+    const correctDelta = Number(b.correctAnswers || 0) - Number(a.correctAnswers || 0);
+    if (correctDelta !== 0) return correctDelta;
+    const answeredDelta = Number(b.totalAnswered || 0) - Number(a.totalAnswered || 0);
+    if (answeredDelta !== 0) return answeredDelta;
+    return Number(b.ts || 0) - Number(a.ts || 0);
+  };
+  return {
+    overall: [...scoped].sort(sorter).slice(0, 10),
+    byLevel: [...scoped].filter((entry) => entry.levelLabel === levelLabel).sort(sorter).slice(0, 10),
+  };
+}
+
+function formatTimeTrialTimestamp(ts) {
+  if (!ts) return "";
+  try {
+    return new Date(ts).toLocaleString("en-AU", {
+      day: "2-digit",
+      month: "short",
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  } catch {
+    return "";
+  }
+}
+
+function getAchievementMetrics(statsLog, timeTrialHistory) {
+  const allStats = summariseStats(statsLog, null);
+  return {
+    totalCorrect: Number(allStats.correctAnswers || 0),
+    timeSpentSeconds: Number(allStats.totalSeconds || 0),
+    coinsEarned: Number(allStats.coinsEarned || 0),
+    coinsSpent: (statsLog || []).reduce((sum, entry) => sum + Number(entry.coinsSpent || 0), 0),
+    raceWins: (statsLog || []).filter((entry) => entry.raceWon).length,
+    bestTimeTrialScore: (timeTrialHistory || []).reduce((best, entry) => Math.max(best, Number(entry.correctAnswers || 0)), 0),
+    bestStreak: (statsLog || []).reduce((best, entry) => Math.max(best, Number(entry.bestStreak || 0)), 0),
+  };
+}
+
+function isAchievementUnlocked(item, achievementMetrics) {
+  if (!item?.achievementOnly) return true;
+  return Number(achievementMetrics?.[item.achievementMetric] || 0) >= Number(item.achievementThreshold || 0);
+}
+
+function formatAchievementRequirement(item) {
+  const threshold = Number(item?.achievementThreshold || 0);
+  switch (item?.achievementMetric) {
+    case "timeSpentSeconds": {
+      if (threshold === 24 * 3600) return "Play for 1 day";
+      if (threshold === 7 * 24 * 3600) return "Play for 1 week";
+      if (threshold === 30 * 24 * 3600) return "Play for 1 month";
+      const hours = threshold / 3600;
+      if (hours >= 1) return `Play for ${Number.isInteger(hours) ? hours : hours.toFixed(1)} hours`;
+      return `Play for ${Math.round(threshold / 60)} minutes`;
+    }
+    case "totalCorrect":
+      return `Answer ${threshold} questions correctly`;
+    case "coinsEarned":
+      return `Earn ${threshold} coins`;
+    case "coinsSpent":
+      return `Spend ${threshold} coins`;
+    case "raceWins":
+      return `Win ${threshold} race${threshold === 1 ? "" : "s"}`;
+    case "bestTimeTrialScore":
+      return `Score ${threshold} correct in a Time Trial`;
+    case "bestStreak":
+      return `Get ${threshold} correct in a row without a mistake`;
+    default:
+      return item?.detail || "Unlock requirement";
+  }
+}
+
+function getAchievementMetricLabel(metric) {
+  switch (metric) {
+    case "timeSpentSeconds": return "Time played";
+    case "totalCorrect": return "Correct answers";
+    case "coinsEarned": return "Coins earned";
+    case "coinsSpent": return "Coins spent";
+    case "raceWins": return "Race wins";
+    case "bestTimeTrialScore": return "Time Trial best";
+    case "bestStreak": return "Streak";
+    default: return "Achievement";
+  }
+}
+
+function readStatsLog() {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(STATS_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeStatsLog(log) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(STATS_STORAGE_KEY, JSON.stringify(log));
+}
+
+function recordStatsEntry(entry) {
+  const log = readStatsLog();
+  const nextLog = [...log, { ...entry, ts: entry.ts || Date.now() }].slice(-500);
+  writeStatsLog(nextLog);
+}
+
+function summariseStats(log, sinceDays = null) {
+  const cutoff = sinceDays ? Date.now() - sinceDays * 24 * 60 * 60 * 1000 : 0;
+  const filtered = (log || []).filter((entry) => !cutoff || entry.ts >= cutoff);
+  const totalSeconds = filtered.reduce((sum, entry) => sum + Number(entry.durationSeconds || 0), 0);
+  const correctAnswers = filtered.reduce((sum, entry) => sum + Number(entry.correctAnswers || 0), 0);
+  const coinsEarned = filtered.reduce((sum, entry) => sum + Number(entry.coinsEarned || 0), 0);
+  const fastestRaceTime = filtered
+    .filter((entry) => typeof entry.raceTimeSeconds === "number" && entry.raceTimeSeconds > 0)
+    .reduce((best, entry) => (best === null || entry.raceTimeSeconds < best ? entry.raceTimeSeconds : best), null);
+  return {
+    totalSeconds,
+    correctAnswers,
+    coinsEarned,
+    fastestRaceTime,
+    roundsPlayed: filtered.length,
+  };
+}
+
+function formatStatDuration(seconds) {
+  const total = Math.max(0, Math.round(seconds || 0));
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const secs = total % 60;
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  if (minutes > 0) return `${minutes}m ${secs}s`;
+  return `${secs}s`;
+}
+
+function getLongestCorrectStreak(resultEntries) {
+  let best = 0;
+  let current = 0;
+  (resultEntries || []).forEach((entry) => {
+    if (entry?.correct) {
+      current += 1;
+      if (current > best) best = current;
+    } else {
+      current = 0;
+    }
+  });
+  return best;
+}
+
+function getThemeShopBarClass(themeId, owned) {
+  switch (themeId) {
+    case "blue": return owned ? "bg-blue-500/70 border-blue-300/60 text-white" : "bg-blue-500/25 border-blue-300/30 text-blue-100/80";
+    case "billea": return owned ? "bg-white border-white text-black" : "bg-white/20 border-white/40 text-white";
+    case "emerald": return owned ? "bg-emerald-500/70 border-emerald-300/60 text-white" : "bg-emerald-500/25 border-emerald-300/30 text-emerald-100/80";
+    case "sunset": return owned ? "bg-orange-500/70 border-orange-300/60 text-white" : "bg-orange-500/25 border-orange-300/30 text-orange-100/80";
+    case "violet": return owned ? "bg-violet-500/70 border-violet-300/60 text-white" : "bg-violet-500/25 border-violet-300/30 text-violet-100/80";
+    case "gold": return owned ? "bg-amber-400/80 border-amber-200/70 text-slate-950" : "bg-amber-400/25 border-amber-200/30 text-amber-100/80";
+    case "crimson": return owned ? "bg-rose-600/75 border-rose-300/60 text-white" : "bg-rose-600/25 border-rose-300/30 text-rose-100/80";
+    case "glacier": return owned ? "bg-sky-400/75 border-cyan-200/60 text-slate-950" : "bg-sky-400/25 border-cyan-200/30 text-sky-100/80";
+    case "midnight": return owned ? "bg-fuchsia-600/75 border-fuchsia-300/60 text-white" : "bg-fuchsia-600/25 border-fuchsia-300/30 text-fuchsia-100/80";
+    case "citrus": return owned ? "bg-lime-500/80 border-lime-200/70 text-slate-950" : "bg-lime-500/25 border-lime-200/30 text-lime-100/80";
+    case "rosequartz": return owned ? "bg-pink-500/75 border-pink-200/60 text-white" : "bg-pink-500/25 border-pink-200/30 text-pink-100/80";
+    case "storm": return owned ? "bg-teal-500/75 border-teal-200/60 text-white" : "bg-teal-500/25 border-teal-200/30 text-teal-100/80";
+    case "rainbow": return owned ? "bg-[linear-gradient(90deg,#fb7185_0%,#facc15_20%,#4ade80_40%,#38bdf8_60%,#a78bfa_80%,#f472b6_100%)] border-white/70 text-white" : "bg-[linear-gradient(90deg,rgba(251,113,133,0.35)_0%,rgba(250,204,21,0.35)_20%,rgba(74,222,128,0.35)_40%,rgba(56,189,248,0.35)_60%,rgba(167,139,250,0.35)_80%,rgba(244,114,182,0.35)_100%)] border-white/30 text-white/90";
+    case "broncos": return owned ? "bg-[repeating-linear-gradient(90deg,#7f1d1d_0px,#7f1d1d_18px,#f59e0b_18px,#f59e0b_30px,#7f1d1d_30px,#7f1d1d_48px)] border-white/50 text-white" : "bg-[repeating-linear-gradient(90deg,rgba(127,29,29,0.55)_0px,rgba(127,29,29,0.55)_18px,rgba(245,158,11,0.55)_18px,rgba(245,158,11,0.55)_30px,rgba(127,29,29,0.55)_30px,rgba(127,29,29,0.55)_48px)] border-white/20 text-white/90";
+    case "raiders": return owned ? "bg-[repeating-linear-gradient(90deg,#14532d_0px,#14532d_18px,#84cc16_18px,#84cc16_28px,#14532d_28px,#14532d_46px)] border-white/50 text-white" : "bg-[repeating-linear-gradient(90deg,rgba(20,83,45,0.55)_0px,rgba(20,83,45,0.55)_18px,rgba(132,204,22,0.55)_18px,rgba(132,204,22,0.55)_28px,rgba(20,83,45,0.55)_28px,rgba(20,83,45,0.55)_46px)] border-white/20 text-white/90";
+    case "bulldogs": return owned ? "bg-[repeating-linear-gradient(180deg,#1d4ed8_0px,#1d4ed8_18px,#f8fafc_18px,#f8fafc_30px,#1d4ed8_30px,#1d4ed8_48px)] border-white/50 text-slate-900" : "bg-[repeating-linear-gradient(180deg,rgba(29,78,216,0.55)_0px,rgba(29,78,216,0.55)_18px,rgba(248,250,252,0.82)_18px,rgba(248,250,252,0.82)_30px,rgba(29,78,216,0.55)_30px,rgba(29,78,216,0.55)_48px)] border-white/20 text-white/90";
+    case "sharks": return owned ? "bg-[linear-gradient(180deg,#38bdf8_0%,#38bdf8_42%,#111827_42%,#111827_46%,#f8fafc_46%,#f8fafc_54%,#111827_54%,#111827_58%,#38bdf8_58%,#38bdf8_100%)] border-white/50 text-slate-900" : "bg-[linear-gradient(180deg,rgba(56,189,248,0.55)_0%,rgba(56,189,248,0.55)_42%,rgba(17,24,39,0.75)_42%,rgba(17,24,39,0.75)_46%,rgba(248,250,252,0.82)_46%,rgba(248,250,252,0.82)_54%,rgba(17,24,39,0.75)_54%,rgba(17,24,39,0.75)_58%,rgba(56,189,248,0.55)_58%,rgba(56,189,248,0.55)_100%)] border-white/20 text-white/90";
+    case "dolphins": return owned ? "bg-[repeating-linear-gradient(90deg,#9f1239_0px,#9f1239_18px,#fb7185_18px,#fb7185_30px,#9f1239_30px,#9f1239_48px)] border-white/50 text-white" : "bg-[repeating-linear-gradient(90deg,rgba(159,18,57,0.55)_0px,rgba(159,18,57,0.55)_18px,rgba(251,113,133,0.55)_18px,rgba(251,113,133,0.55)_30px,rgba(159,18,57,0.55)_30px,rgba(159,18,57,0.55)_48px)] border-white/20 text-white/90";
+    case "titans": return owned ? "bg-[repeating-linear-gradient(90deg,#082f49_0px,#082f49_18px,#7dd3fc_18px,#7dd3fc_34px,#fde047_34px,#fde047_44px,#082f49_44px,#082f49_60px)] border-white/50 text-slate-950" : "bg-[repeating-linear-gradient(90deg,rgba(8,47,73,0.65)_0px,rgba(8,47,73,0.65)_18px,rgba(125,211,252,0.55)_18px,rgba(125,211,252,0.55)_34px,rgba(253,224,71,0.55)_34px,rgba(253,224,71,0.55)_44px,rgba(8,47,73,0.65)_44px,rgba(8,47,73,0.65)_60px)] border-white/20 text-white/90";
+    case "seaeagles": return owned ? "bg-[linear-gradient(180deg,#7f1d1d_0%,#7f1d1d_44%,#f8fafc_44%,#f8fafc_56%,#7f1d1d_56%,#7f1d1d_100%)] border-white/50 text-white" : "bg-[linear-gradient(180deg,rgba(127,29,29,0.65)_0%,rgba(127,29,29,0.65)_44%,rgba(248,250,252,0.82)_44%,rgba(248,250,252,0.82)_56%,rgba(127,29,29,0.65)_56%,rgba(127,29,29,0.65)_100%)] border-white/20 text-white/90";
+    case "melbstorm": return owned ? "bg-[repeating-linear-gradient(90deg,#4c1d95_0px,#4c1d95_18px,#facc15_18px,#facc15_22px,#312e81_22px,#312e81_42px)] border-white/50 text-white" : "bg-[repeating-linear-gradient(90deg,rgba(76,29,149,0.55)_0px,rgba(76,29,149,0.55)_18px,rgba(250,204,21,0.55)_18px,rgba(250,204,21,0.55)_22px,rgba(49,46,129,0.55)_22px,rgba(49,46,129,0.55)_42px)] border-white/20 text-white/90";
+    case "knights": return owned ? "bg-[repeating-linear-gradient(180deg,#7f1d1d_0px,#7f1d1d_24px,#1d4ed8_24px,#1d4ed8_42px,#7f1d1d_42px,#7f1d1d_66px)] border-white/50 text-white" : "bg-[repeating-linear-gradient(180deg,rgba(127,29,29,0.55)_0px,rgba(127,29,29,0.55)_24px,rgba(29,78,216,0.55)_24px,rgba(29,78,216,0.55)_42px,rgba(127,29,29,0.55)_42px,rgba(127,29,29,0.55)_66px)] border-white/20 text-white/90";
+    case "warriors": return owned ? "bg-[repeating-linear-gradient(90deg,#111827_0px,#111827_18px,#2563eb_18px,#2563eb_24px,#dc2626_24px,#dc2626_28px,#a3e635_28px,#a3e635_34px,#facc15_34px,#facc15_38px,#111827_38px,#111827_56px)] border-white/50 text-white" : "bg-[repeating-linear-gradient(90deg,rgba(17,24,39,0.7)_0px,rgba(17,24,39,0.7)_18px,rgba(37,99,235,0.55)_18px,rgba(37,99,235,0.55)_24px,rgba(220,38,38,0.55)_24px,rgba(220,38,38,0.55)_28px,rgba(163,230,53,0.55)_28px,rgba(163,230,53,0.55)_34px,rgba(250,204,21,0.55)_34px,rgba(250,204,21,0.55)_38px,rgba(17,24,39,0.7)_38px,rgba(17,24,39,0.7)_56px)] border-white/20 text-white/90";
+    case "cowboys": return owned ? "bg-[repeating-linear-gradient(90deg,#1e3a8a_0px,#1e3a8a_18px,#facc15_18px,#facc15_30px,#1e3a8a_30px,#1e3a8a_50px)] border-white/50 text-white" : "bg-[repeating-linear-gradient(90deg,rgba(30,58,138,0.55)_0px,rgba(30,58,138,0.55)_18px,rgba(250,204,21,0.55)_18px,rgba(250,204,21,0.55)_30px,rgba(30,58,138,0.55)_30px,rgba(30,58,138,0.55)_50px)] border-white/20 text-white/90";
+    case "eels": return owned ? "bg-[repeating-linear-gradient(90deg,#2563eb_0px,#2563eb_18px,#fde047_18px,#fde047_30px,#2563eb_30px,#2563eb_48px)] border-white/50 text-slate-950" : "bg-[repeating-linear-gradient(90deg,rgba(37,99,235,0.55)_0px,rgba(37,99,235,0.55)_18px,rgba(253,224,71,0.65)_18px,rgba(253,224,71,0.65)_30px,rgba(37,99,235,0.55)_30px,rgba(37,99,235,0.55)_48px)] border-white/20 text-white/90";
+    case "panthers": return owned ? "bg-[repeating-linear-gradient(90deg,#000000_0px,#000000_20px,#16a34a_20px,#16a34a_22px,#dc2626_22px,#dc2626_24px,#eab308_24px,#eab308_26px,#f8fafc_26px,#f8fafc_28px)] border-white/50 text-white" : "bg-[repeating-linear-gradient(90deg,rgba(0,0,0,0.75)_0px,rgba(0,0,0,0.75)_20px,rgba(22,163,74,0.55)_20px,rgba(22,163,74,0.55)_22px,rgba(220,38,38,0.55)_22px,rgba(220,38,38,0.55)_24px,rgba(234,179,8,0.55)_24px,rgba(234,179,8,0.55)_26px,rgba(248,250,252,0.8)_26px,rgba(248,250,252,0.8)_28px)] border-white/20 text-white/90";
+    case "rabbitohs": return owned ? "bg-[repeating-linear-gradient(180deg,#166534_0px,#166534_10px,#991b1b_10px,#991b1b_20px)] border-white/50 text-white" : "bg-[repeating-linear-gradient(180deg,rgba(22,101,52,0.55)_0px,rgba(22,101,52,0.55)_10px,rgba(153,27,27,0.55)_10px,rgba(153,27,27,0.55)_20px)] border-white/20 text-white/90";
+    case "dragons": return owned ? "bg-[linear-gradient(180deg,#f8fafc_0%,#f8fafc_44%,#dc2626_44%,#dc2626_58%,#f8fafc_58%,#f8fafc_100%)] border-red-300/60 text-slate-900" : "bg-[linear-gradient(180deg,rgba(248,250,252,0.92)_0%,rgba(248,250,252,0.92)_44%,rgba(220,38,38,0.76)_44%,rgba(220,38,38,0.76)_58%,rgba(248,250,252,0.92)_58%,rgba(248,250,252,0.92)_100%)] border-red-200/30 text-slate-900";
+    case "roosters": return owned ? "bg-[linear-gradient(180deg,#082f49_0%,#082f49_42%,#f8fafc_42%,#f8fafc_46%,#dc2626_46%,#dc2626_50%,#2563eb_50%,#2563eb_54%,#f8fafc_54%,#f8fafc_58%,#082f49_58%,#082f49_100%)] border-white/60 text-white" : "bg-[linear-gradient(180deg,rgba(8,47,73,0.78)_0%,rgba(8,47,73,0.78)_42%,rgba(248,250,252,0.82)_42%,rgba(248,250,252,0.82)_46%,rgba(220,38,38,0.75)_46%,rgba(220,38,38,0.75)_50%,rgba(37,99,235,0.75)_50%,rgba(37,99,235,0.75)_54%,rgba(248,250,252,0.82)_54%,rgba(248,250,252,0.82)_58%,rgba(8,47,73,0.78)_58%,rgba(8,47,73,0.78)_100%)] border-white/20 text-white/90";
+    case "tigers": return owned ? "bg-[repeating-linear-gradient(90deg,#111827_0px,#111827_16px,#f97316_16px,#f97316_30px,#111827_30px,#111827_44px)] border-white/50 text-white" : "bg-[repeating-linear-gradient(90deg,rgba(17,24,39,0.7)_0px,rgba(17,24,39,0.7)_16px,rgba(249,115,22,0.6)_16px,rgba(249,115,22,0.6)_30px,rgba(17,24,39,0.7)_30px,rgba(17,24,39,0.7)_44px)] border-white/20 text-white/90";
+    case "matildas": return owned ? "bg-[repeating-linear-gradient(90deg,#14532d_0px,#14532d_14px,#facc15_14px,#facc15_20px,#166534_20px,#166534_38px)] border-white/50 text-white" : "bg-[repeating-linear-gradient(90deg,rgba(20,83,45,0.65)_0px,rgba(20,83,45,0.65)_14px,rgba(250,204,21,0.55)_14px,rgba(250,204,21,0.55)_20px,rgba(22,101,52,0.65)_20px,rgba(22,101,52,0.65)_38px)] border-white/20 text-white/90";
+    case "swans": return owned ? "bg-[linear-gradient(180deg,#991b1b_0%,#991b1b_44%,#f8fafc_44%,#f8fafc_56%,#991b1b_56%,#991b1b_100%)] border-white/60 text-white" : "bg-[linear-gradient(180deg,rgba(153,27,27,0.72)_0%,rgba(153,27,27,0.72)_44%,rgba(248,250,252,0.82)_44%,rgba(248,250,252,0.82)_56%,rgba(153,27,27,0.72)_56%,rgba(153,27,27,0.72)_100%)] border-white/20 text-white/90";
+    case "giants": return owned ? "bg-[repeating-linear-gradient(90deg,#1f2937_0px,#1f2937_16px,#ea580c_16px,#ea580c_30px,#1f2937_30px,#1f2937_46px)] border-white/50 text-white" : "bg-[repeating-linear-gradient(90deg,rgba(31,41,55,0.7)_0px,rgba(31,41,55,0.7)_16px,rgba(234,88,12,0.6)_16px,rgba(234,88,12,0.6)_30px,rgba(31,41,55,0.7)_30px,rgba(31,41,55,0.7)_46px)] border-white/20 text-white/90";
+    case "chrono": return owned ? "bg-[linear-gradient(90deg,#0f172a_0%,#164e63_40%,#22d3ee_100%)] border-cyan-200/60 text-white" : "bg-[linear-gradient(90deg,rgba(15,23,42,0.82)_0%,rgba(22,78,99,0.72)_40%,rgba(34,211,238,0.42)_100%)] border-cyan-200/30 text-white/90";
+    case "champion": return owned ? "bg-[linear-gradient(90deg,#111827_0%,#7f1d1d_42%,#f59e0b_100%)] border-amber-200/60 text-white" : "bg-[linear-gradient(90deg,rgba(17,24,39,0.84)_0%,rgba(127,29,29,0.7)_42%,rgba(245,158,11,0.42)_100%)] border-amber-200/30 text-white/90";
+    case "streak": return owned ? "bg-[linear-gradient(90deg,#052e16_0%,#0f766e_42%,#86efac_100%)] border-emerald-200/60 text-white" : "bg-[linear-gradient(90deg,rgba(5,46,22,0.84)_0%,rgba(15,118,110,0.7)_42%,rgba(134,239,172,0.42)_100%)] border-emerald-200/30 text-white/90";
+    case "vault": return owned ? "bg-[linear-gradient(90deg,#052e16_0%,#0f766e_42%,#f59e0b_100%)] border-emerald-200/60 text-white" : "bg-[linear-gradient(90deg,rgba(5,46,22,0.84)_0%,rgba(15,118,110,0.7)_42%,rgba(245,158,11,0.42)_100%)] border-emerald-200/30 text-white/90";
+    case "auroraforge": return owned ? "bg-[linear-gradient(90deg,#0f172a_0%,#0ea5e9_24%,#10b981_48%,#8b5cf6_72%,#f472b6_100%)] border-white/60 text-white" : "bg-[linear-gradient(90deg,rgba(15,23,42,0.86)_0%,rgba(14,165,233,0.4)_24%,rgba(16,185,129,0.4)_48%,rgba(139,92,246,0.4)_72%,rgba(244,114,182,0.4)_100%)] border-white/28 text-white/90";
+    case "prismaticlegend": return owned ? "bg-[linear-gradient(90deg,#1d4ed8_0%,#14b8a6_24%,#7c3aed_48%,#ec4899_72%,#f59e0b_100%)] border-white/65 text-white" : "bg-[linear-gradient(90deg,rgba(29,78,216,0.42)_0%,rgba(20,184,166,0.42)_24%,rgba(124,58,237,0.42)_48%,rgba(236,72,153,0.42)_72%,rgba(245,158,11,0.42)_100%)] border-white/30 text-white/90";
+    case "timesurge": return owned ? "bg-[linear-gradient(90deg,#0f172a_0%,#155e75_32%,#0ea5e9_68%,#22d3ee_100%)] border-cyan-200/60 text-white" : "bg-[linear-gradient(90deg,rgba(15,23,42,0.84)_0%,rgba(21,94,117,0.5)_32%,rgba(14,165,233,0.4)_68%,rgba(34,211,238,0.42)_100%)] border-cyan-200/30 text-white/90";
+    case "quantumcore": return owned ? "bg-[linear-gradient(90deg,#020617_0%,#312e81_34%,#7c3aed_68%,#ec4899_100%)] border-violet-200/60 text-white" : "bg-[linear-gradient(90deg,rgba(2,6,23,0.84)_0%,rgba(49,46,129,0.5)_34%,rgba(124,58,237,0.4)_68%,rgba(236,72,153,0.42)_100%)] border-violet-200/30 text-white/90";
+    case "eternalglow": return owned ? "bg-[linear-gradient(90deg,#0f766e_0%,#1d4ed8_22%,#7c3aed_48%,#ec4899_74%,#f59e0b_100%)] border-white/70 text-white" : "bg-[linear-gradient(90deg,rgba(15,118,110,0.46)_0%,rgba(29,78,216,0.4)_22%,rgba(124,58,237,0.4)_48%,rgba(236,72,153,0.42)_74%,rgba(245,158,11,0.42)_100%)] border-white/34 text-white/90";
+    default: return owned ? "bg-white/30 border-white/50 text-white" : "bg-white/10 border-white/20 text-white/80";
+  }
+}
+
 function formatDuration(ms) {
   const totalSeconds = Math.max(0, Math.ceil(ms / 1000));
   const minutes = Math.floor(totalSeconds / 60);
@@ -1185,6 +2247,19 @@ function getPremiumRingOverlayClass(ringId) {
       return "bg-[conic-gradient(from_180deg_at_50%_50%,#1e1b4b_0deg,#312e81_90deg,#ec4899_220deg,#1e1b4b_360deg)]";
     case "ring-crownfire":
       return "bg-[conic-gradient(from_180deg_at_50%_50%,#fde68a_0deg,#f59e0b_120deg,#fb7185_230deg,#fde68a_360deg)]";
+    case "ring-heartburst":
+    case "ring-rainbowhearts":
+    case "ring-mythichearts":
+      return "bg-[radial-gradient(circle_at_50%_50%,rgba(244,114,182,0.0)_0%,rgba(244,114,182,0.0)_42%,rgba(244,114,182,0.95)_43%,rgba(244,114,182,0.95)_49%,transparent_50%),radial-gradient(circle_at_22%_24%,rgba(255,255,255,0.95)_0_7%,transparent_8%),radial-gradient(circle_at_78%_24%,rgba(255,255,255,0.95)_0_7%,transparent_8%),radial-gradient(circle_at_50%_78%,rgba(255,255,255,0.95)_0_6%,transparent_7%)]";
+    case "ring-starshine":
+    case "ring-crystalstars":
+    case "ring-candystars":
+    case "ring-legendstars":
+      return "bg-[radial-gradient(circle_at_50%_50%,rgba(255,255,255,0)_0%,rgba(255,255,255,0)_42%,rgba(255,255,255,0.96)_43%,rgba(255,255,255,0.96)_49%,transparent_50%),radial-gradient(circle_at_22%_24%,rgba(253,224,71,0.95)_0_5%,transparent_6%),radial-gradient(circle_at_78%_24%,rgba(253,224,71,0.95)_0_5%,transparent_6%),radial-gradient(circle_at_50%_78%,rgba(253,224,71,0.95)_0_5%,transparent_6%)]";
+    case "ring-dot-pop":
+      return "bg-[radial-gradient(circle_at_18%_22%,rgba(255,255,255,0.9)_0_5%,transparent_6%),radial-gradient(circle_at_82%_22%,rgba(255,255,255,0.9)_0_5%,transparent_6%),radial-gradient(circle_at_18%_78%,rgba(255,255,255,0.9)_0_5%,transparent_6%),radial-gradient(circle_at_82%_78%,rgba(255,255,255,0.9)_0_5%,transparent_6%)]";
+    case "ring-cometcrown":
+      return "bg-[conic-gradient(from_180deg_at_50%_50%,#e0f2fe_0deg,#38bdf8_120deg,#ffffff_220deg,#e0f2fe_360deg)]";
     default:
       return null;
   }
@@ -1192,6 +2267,37 @@ function getPremiumRingOverlayClass(ringId) {
 
 function isPremiumRing(ringId) {
   return Boolean(getPremiumRingOverlayClass(ringId));
+}
+
+function getEmojiVisualOffsetClass(emoji) {
+  const symbol = String(emoji || "");
+  if (symbol === "👑") return "-translate-y-[10%]";
+  return "";
+}
+
+function getEmojiVisualClass(emoji, sizeClass = "") {
+  return cn(
+    "w-full h-full flex items-center justify-center leading-none relative z-10 scale-125",
+    getEmojiVisualOffsetClass(emoji),
+    sizeClass
+  );
+}
+
+function getCircularBackgroundClass(style) {
+  return cn("absolute inset-[-2px] rounded-full", style || "bg-slate-900/70");
+}
+
+function getBoostMultiplierFromType(type) {
+  switch (type) {
+    case "coinMultiplier4x":
+      return 4;
+    case "coinMultiplier3x":
+      return 3;
+    case "coinMultiplier2x":
+      return 2;
+    default:
+      return 1;
+  }
 }
 
 function getMultiplayerLevelFromMode(selectedMode, history) {
@@ -1207,25 +2313,188 @@ function getMultiplayerLevelFromMode(selectedMode, history) {
   return safeHistory.addsubLevel || "AdS3";
 }
 
-function buildFakeMultiplayerOpponents() {
+function buildFakeMultiplayerOpponents(selectedMode, raceLevel) {
   const names = shuffle(fakeMultiplayerNames).slice(0, 3);
-  const rivalIndex = randInt(0, 2);
   const emojiOptions = PROFILE_SHOP_ITEMS
     .filter((item) => item.category === "emoji" && item.emoji)
     .map((item) => item.emoji);
+  const backgroundOptions = PROFILE_SHOP_ITEMS
+    .filter((item) => item.category === "background")
+    .map((item) => item.style)
+    .filter(Boolean);
+  const ringOptions = PROFILE_SHOP_ITEMS
+    .filter((item) => item.category === "ring")
+    .map((item) => ({ style: item.style, overlay: getPremiumRingOverlayClass(item.id) }))
+    .filter((item) => item.style);
+  const raceKey = getMultiplayerRaceKey(selectedMode, raceLevel);
+  const playerBestTime = Number(readMultiplayerBests()[raceKey] || 0);
 
-  return names.map((name, index) => ({
-    id: `bot-${index}-${name}`,
-    name,
+  function makeAppearance() {
+    const ring = choice(ringOptions.length ? ringOptions : [{ style: "", overlay: null }]);
+    return {
+      icon: choice(emojiOptions.length ? emojiOptions : ["🐨", "🦘", "🐊", "🦉", "🐸", "🦊"]),
+      backgroundStyle: choice(backgroundOptions.length ? backgroundOptions : ["bg-slate-900/70"]),
+      ringStyle: ring.style || "",
+      ringOverlay: ring.overlay || null,
+    };
+  }
+
+  return [
+    {
+      id: `bot-question-${names[0]}`,
+      name: names[0],
+      ...makeAppearance(),
+      strategy: "questionTracker",
+      progress: 0,
+      joined: false,
+      joinAt: randInt(0, MULTIPLAYER_WAIT_SECONDS),
+      burst: false,
+      lockedPacePerSecond: null,
+      finished: false,
+      finishOrdinal: null,
+      targetDuration: null,
+    },
+    {
+      id: `bot-time-${names[1]}`,
+      name: names[1],
+      ...makeAppearance(),
+      strategy: "timeTracker",
+      progress: 0,
+      joined: false,
+      joinAt: randInt(0, MULTIPLAYER_WAIT_SECONDS),
+      burst: false,
+      lockedPacePerSecond: null,
+      finished: false,
+      finishOrdinal: null,
+      targetDuration: null,
+    },
+    {
+      id: `bot-best-${names[2]}`,
+      name: names[2],
+      ...makeAppearance(),
+      strategy: "personalBest",
+      progress: 0,
+      joined: false,
+      joinAt: randInt(0, MULTIPLAYER_WAIT_SECONDS),
+      burst: false,
+      lockedPacePerSecond: null,
+      finished: false,
+      finishOrdinal: null,
+      targetDuration: playerBestTime > 0 ? Math.max(60, playerBestTime) : randInt(120, 200),
+    },
+  ];
+}
+
+function createKingChallenger() {
+  const emojiOptions = PROFILE_SHOP_ITEMS
+    .filter((item) => item.category === "emoji" && item.emoji)
+    .map((item) => item.emoji);
+  const backgroundOptions = PROFILE_SHOP_ITEMS
+    .filter((item) => item.category === "background")
+    .map((item) => item.style)
+    .filter(Boolean);
+  const ringOptions = PROFILE_SHOP_ITEMS
+    .filter((item) => item.category === "ring")
+    .map((item) => ({ style: item.style, overlay: getPremiumRingOverlayClass(item.id) }))
+    .filter((item) => item.style);
+  const ring = choice(ringOptions.length ? ringOptions : [{ style: "", overlay: null }]);
+
+  return {
+    id: `king-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    name: choice(fakeMultiplayerNames),
     icon: choice(emojiOptions.length ? emojiOptions : ["🐨", "🦘", "🐊", "🦉", "🐸", "🦊"]),
-    targetDuration: randInt(120, 240),
+    backgroundStyle: choice(backgroundOptions.length ? backgroundOptions : ["bg-slate-900/70"]),
+    ringStyle: ring.style || "",
+    ringOverlay: ring.overlay || null,
+  };
+}
+
+function getFreeFallMaxConcurrent(elapsedMs = 0) {
+  if (elapsedMs < 18000) return 1;
+  if (elapsedMs < 42000) return 2;
+  if (elapsedMs < 70000) return 3;
+  return 4;
+}
+
+function getFreeFallFallDurationMs(elapsedMs = 0) {
+  if (elapsedMs < 18000) return 12000;
+  if (elapsedMs < 42000) return 10200;
+  if (elapsedMs < 70000) return 9000;
+  return 7800;
+}
+
+function getFreeFallSpawnDelayMs(elapsedMs = 0) {
+  if (elapsedMs < 18000) return 1200;
+  if (elapsedMs < 42000) return 900;
+  if (elapsedMs < 70000) return 700;
+  return 560;
+}
+
+function buildFreeFallQuestion(activeQuestions = [], selectedMode, selectedLevel, elapsedMs = 0) {
+  const activeAnswers = activeQuestions
+    .filter((question) => !question.resolvedAt)
+    .map((question) => String(question.answer || "").trim().toLowerCase());
+
+  let nextQuestion = null;
+  for (let attempt = 0; attempt < 80; attempt += 1) {
+    const candidate = generateQuestion(selectedMode, selectedLevel);
+    const answerKey = String(candidate.answer || "").trim().toLowerCase();
+    if (!activeAnswers.includes(answerKey)) {
+      nextQuestion = candidate;
+      break;
+    }
+  }
+
+  if (!nextQuestion) return null;
+
+  const occupiedLanes = new Set(activeQuestions.filter((question) => !question.resolvedAt).map((question) => question.lane));
+  const availableLanes = FREE_FALL_LANES.filter((lane) => !occupiedLanes.has(lane));
+  const lane = choice(availableLanes.length ? availableLanes : FREE_FALL_LANES);
+  const spawnedAt = Date.now();
+  const isSpecial = Math.random() < FREE_FALL_SPECIAL_CHANCE;
+  const isFast = !isSpecial && Math.random() < FREE_FALL_FAST_CHANCE;
+  const baseDurationMs = getFreeFallFallDurationMs(elapsedMs);
+
+  return {
+    ...nextQuestion,
+    id: `freefall-${spawnedAt}-${Math.random().toString(36).slice(2, 8)}`,
+    lane,
     progress: 0,
-    joined: false,
-    joinAt: randInt(0, MULTIPLAYER_WAIT_SECONDS),
-    burst: false,
-    isAdaptiveRival: index === rivalIndex,
-    lockedPacePerSecond: null,
-  }));
+    durationMs: isFast ? Math.max(2600, Math.round(baseDurationMs * FREE_FALL_FAST_DURATION_MULTIPLIER)) : baseDurationMs,
+    spawnedAt,
+    isSpecial,
+    isFast,
+    goldUntil: spawnedAt + (isSpecial ? FREE_FALL_SPECIAL_GOLD_MS : 0),
+    resolvedAt: null,
+    flash: null,
+  };
+}
+
+function createTugTeacher(roundIndex = 0) {
+  const emojiOptions = PROFILE_SHOP_ITEMS
+    .filter((item) => item.category === "emoji" && item.emoji)
+    .map((item) => item.emoji);
+  const backgroundOptions = PROFILE_SHOP_ITEMS
+    .filter((item) => item.category === "background")
+    .map((item) => item.style)
+    .filter(Boolean);
+  const ringOptions = PROFILE_SHOP_ITEMS
+    .filter((item) => item.category === "ring")
+    .map((item) => ({ style: item.style, overlay: getPremiumRingOverlayClass(item.id) }))
+    .filter((item) => item.style);
+  const ring = choice(ringOptions.length ? ringOptions : [{ style: "", overlay: null }]);
+  const roundNumber = roundIndex + 1;
+  const override = TUG_TEACHER_OVERRIDES[roundNumber];
+
+  return {
+    id: `tug-teacher-${roundNumber}`,
+    roundNumber,
+    name: override?.name || TUG_OF_WAR_TEACHERS[roundIndex] || `Teacher ${roundNumber}`,
+    icon: override?.icon || choice(emojiOptions.length ? emojiOptions : ["🦉", "🐲", "🦊", "🗿", "🧠", "🤖"]),
+    backgroundStyle: override?.backgroundStyle || choice(backgroundOptions.length ? backgroundOptions : ["bg-slate-900/70"]),
+    ringStyle: override?.ringStyle || ring.style || "",
+    ringOverlay: override?.ringOverlay || ring.overlay || null,
+  };
 }
 
 /* mode labels */
@@ -1249,6 +2518,22 @@ const modeMeta = {
   multiplayer: {
     title: "Multiplayer",
     description: "Race against three other players using your saved progression level.",
+  },
+  timetrial: {
+    title: "Time Trial",
+    description: "A 1-minute sprint against the clock using your saved progression level.",
+  },
+  king: {
+    title: "King of the Hill",
+    description: "Survive 15-question rounds as each new round gives you less time per question.",
+  },
+  tug: {
+    title: "Tug of War",
+    description: "Pull the rope against a teacher opponent. Every correct answer drags the rope your way while the teacher keeps tugging back faster each round.",
+  },
+  freefall: {
+    title: "Free Fall",
+    description: "Answer falling questions before they hit the bottom line. Special gold questions can give you an extra life if you answer them quickly.",
   },
 };
 
@@ -1437,9 +2722,13 @@ const levelInfo = {
 export default function NSWProgressionsMathGame() {
   const [screen, setScreen] = useState("home");
   const [cheatModeActive, setCheatModeActive] = useState(false);
-  const [cheatSequence, setCheatSequence] = useState("");
   const [shopOpen, setShopOpen] = useState(false);
   const [purchasedItemsOpen, setPurchasedItemsOpen] = useState(false);
+  const [selectedShopCategory, setSelectedShopCategory] = useState("emoji");
+  const [emojiShopTab, setEmojiShopTab] = useState("standard");
+  const [backgroundShopTab, setBackgroundShopTab] = useState("standard");
+  const [ringShopTab, setRingShopTab] = useState("standard");
+  const [upgradesShopTab, setUpgradesShopTab] = useState("standard");
   const [profileState, setProfileState] = useState({ coins: 0, ownedItems: [], equippedItems: [], activeBoosts: [] });
   const [playerName, setPlayerName] = useState("");
   const [isEditingPlayerName, setIsEditingPlayerName] = useState(false);
@@ -1449,7 +2738,19 @@ export default function NSWProgressionsMathGame() {
   const [roundReward, setRoundReward] = useState(null);
   const [testingCoinsEarned, setTestingCoinsEarned] = useState(0);
   const [multiplayerState, setMultiplayerState] = useState(null);
+  const [timeTrialState, setTimeTrialState] = useState(null);
+  const [timeTrialCountdown, setTimeTrialCountdown] = useState(null);
+  const [kingState, setKingState] = useState(null);
+  const [kingIntroDeadline, setKingIntroDeadline] = useState(null);
+  const [tugState, setTugState] = useState(null);
+  const [tugIntroDeadline, setTugIntroDeadline] = useState(null);
+  const [tugFlash, setTugFlash] = useState(null);
+  const [freeFallState, setFreeFallState] = useState(null);
+  const tugFlashTimeoutRef = useRef(null);
   const [mode, setMode] = useState(null);
+  const [sessionType, setSessionType] = useState(null);
+  const [practiseQuestionCount, setPractiseQuestionCount] = useState(15);
+  const [activeRoundConfig, setActiveRoundConfig] = useState(PRACTISE_ROUND_OPTIONS[15]);
   const [level, setLevel] = useState(null);
   const [mixedSelection, setMixedSelection] = useState({ addsubLevel: null, muldivLevel: null });
   const [userHistory, setUserHistory] = useState({ addsubLevel: "AdS3", muldivLevel: "MuS3" });
@@ -1462,10 +2763,15 @@ export default function NSWProgressionsMathGame() {
   const [saveCodeInput, setSaveCodeInput] = useState("");
   const [saveCodeStatus, setSaveCodeStatus] = useState("");
   const [showPasswordEntry, setShowPasswordEntry] = useState(false);
+  const [passwordPanelMode, setPasswordPanelMode] = useState(null);
+  const [homeModeGroup, setHomeModeGroup] = useState("testing");
+  const [testingStartSelector, setTestingStartSelector] = useState(null);
+  const [manualTestingStart, setManualTestingStart] = useState({ addsubLevel: "AdS3", muldivLevel: "MuS3" });
   const [testingState, setTestingState] = useState(null);
+  const [historyRefreshKey, setHistoryRefreshKey] = useState(0);
   const [questions, setQuestions] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [timeLeft, setTimeLeft] = useState(ROUND_TIME);
+  const [timeLeft, setTimeLeft] = useState(DEFAULT_ROUND_TIME);
   const [answer, setAnswer] = useState("");
   const [feedback, setFeedback] = useState(null);
   const [results, setResults] = useState([]);
@@ -1474,14 +2780,64 @@ export default function NSWProgressionsMathGame() {
   const playerNameInputRef = useRef(null);
 
   const currentQuestion = questions[currentIndex];
+
+  const exitToHome = () => {
+    setPendingTestingExitConfirm(false);
+    setCurrentIndex(0);
+    setQuestions([]);
+    setAnswer("");
+    setFeedback(null);
+    setResults([]);
+    setRoundFinished(false);
+    setTimeLeft(DEFAULT_ROUND_TIME);
+    setTimeTrialState(null);
+    setTimeTrialCountdown(null);
+    setMultiplayerState(null);
+    setKingState(null);
+    setKingIntroDeadline(null);
+    setTugState(null);
+    setTugIntroDeadline(null);
+    setTugFlash(null);
+    setFreeFallState(null);
+    setRoundReward(null);
+    setTestingCoinsEarned(0);
+    setTestingStartSelector(null);
+    setShowPasswordEntry(false);
+    setPasswordPanelMode(null);
+    setIsEditingPlayerName(false);
+    setScreen("home");
+    setMode(null);
+    setSessionType(null);
+    setLevel(null);
+    setMixedSelection({ addsubLevel: null, muldivLevel: null });
+    setTestingState(null);
+  };
+
+  function triggerTugFlash(side) {
+    const flashKey = `${side}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    if (tugFlashTimeoutRef.current) {
+      window.clearTimeout(tugFlashTimeoutRef.current);
+    }
+    setTugFlash({ side, key: flashKey });
+    tugFlashTimeoutRef.current = window.setTimeout(() => {
+      setTugFlash((current) => current?.key === flashKey ? null : current);
+    }, 420);
+  }
   const isTestingMode = mode === "testing";
   const isMultiplayerMode = mode === "multiplayer";
+  const isTimeTrialMode = mode === "timetrial";
+  const roundQuestionCount = Number(activeRoundConfig?.questionCount || DEFAULT_QUESTION_COUNT);
+  const roundTimeLimit = Number(activeRoundConfig?.timeLimit || DEFAULT_ROUND_TIME);
+  const currentPassScore = sessionType === "practice" ? getPractisePassScore(roundQuestionCount) : PASS_SCORE;
   const score = useMemo(() => results.filter((r) => r.correct).length, [results]);
-  const progressValue = (results.length / QUESTIONS_PER_ROUND) * 100;
+  const progressValue = (results.length / Math.max(1, roundQuestionCount)) * 100;
   const multiplayerPlayerProgress = multiplayerState ? Math.min(100, (multiplayerState.playerScore / MULTIPLAYER_TARGET_SCORE) * 100) : 0;
-  const expectedAnsweredByNow = ((ROUND_TIME - timeLeft) / ROUND_TIME) * QUESTIONS_PER_ROUND;
+  const expectedAnsweredByNow = ((roundTimeLimit - timeLeft) / Math.max(1, roundTimeLimit)) * roundQuestionCount;
   const paceDelta = results.length - expectedAnsweredByNow;
-  const timerProgress = ((ROUND_TIME - timeLeft) / ROUND_TIME) * 100;
+  const currentRoundTime = isTimeTrialMode ? TIME_TRIAL_SECONDS : roundTimeLimit;
+  const timerProgress = ((currentRoundTime - timeLeft) / currentRoundTime) * 100;
+  const timeTrialCountdownLabel = isTimeTrialMode && timeTrialCountdown !== null ? TIME_TRIAL_COUNTDOWN_STEPS[timeTrialCountdown] : null;
+  const isTimeTrialInteractionLocked = isTimeTrialMode && timeTrialCountdown !== null;
 
   useEffect(() => {
     setUserHistory(readUserHistory());
@@ -1495,14 +2851,213 @@ export default function NSWProgressionsMathGame() {
   }, []);
 
   useEffect(() => {
-    if (screen === "game" && !roundFinished && timeLeft > 0) {
+    return () => {
+      if (tugFlashTimeoutRef.current) {
+        window.clearTimeout(tugFlashTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (screen === "game" && !roundFinished && timeLeft > 0 && !(isTimeTrialMode && timeTrialCountdown !== null)) {
       const timer = setTimeout(() => setTimeLeft((t) => t - 1), 1000);
       return () => clearTimeout(timer);
     }
     if (screen === "game" && timeLeft <= 0 && !roundFinished) {
       finishRound();
     }
-  }, [screen, timeLeft, roundFinished]);
+  }, [screen, timeLeft, roundFinished, isTimeTrialMode, timeTrialCountdown]);
+
+  useEffect(() => {
+    const pauseKingTimer = feedback === "correct";
+    if (screen === "kingGame" && !roundFinished && !pauseKingTimer && timeLeft > 0) {
+      const timer = setTimeout(() => setTimeLeft((t) => t - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+    if (screen === "kingGame" && timeLeft <= 0 && !roundFinished && !pauseKingTimer) {
+      finishKingRun("Time ran out");
+    }
+  }, [screen, timeLeft, roundFinished, feedback]);
+
+  useEffect(() => {
+    if (screen !== "game" || !isTimeTrialMode || timeTrialCountdown === null) return;
+    const timer = setTimeout(() => {
+      setTimeTrialCountdown((current) => {
+        if (current === null) return current;
+        return current >= TIME_TRIAL_COUNTDOWN_STEPS.length - 1 ? null : current + 1;
+      });
+    }, timeTrialCountdown === TIME_TRIAL_COUNTDOWN_STEPS.length - 1 ? 750 : 1050);
+    return () => clearTimeout(timer);
+  }, [screen, isTimeTrialMode, timeTrialCountdown]);
+
+  useEffect(() => {
+    if (screen !== "kingIntermission" || !kingState) return;
+    const step = Number(kingState.intermissionStep || 0);
+    const timer = setTimeout(() => {
+      if (step >= KING_OF_THE_HILL_INTERMISSION_STEPS.length - 1) {
+        const nextRound = Number(kingState.roundNumber || 1) + 1;
+        const nextTimePerQuestion = Math.max(KING_OF_THE_HILL_MIN_SECONDS, KING_OF_THE_HILL_START_SECONDS - (nextRound - 1));
+        const nextState = {
+          ...kingState,
+          roundNumber: nextRound,
+          timePerQuestion: nextTimePerQuestion,
+          challenger: createKingChallenger(),
+          intermissionStep: 0,
+          intermissionLabel: null,
+        };
+        setKingState(nextState);
+        setKingIntroDeadline(Date.now() + 4000);
+        setScreen("kingIntro");
+        return;
+      }
+
+      setKingState((current) => current ? {
+        ...current,
+        intermissionStep: step + 1,
+        intermissionLabel: KING_OF_THE_HILL_INTERMISSION_STEPS[step + 1],
+      } : current);
+    }, 1140);
+    return () => clearTimeout(timer);
+  }, [screen, kingState]);
+
+  useEffect(() => {
+    if (screen !== "kingIntro" || !kingState) return;
+    const timer = setTimeout(() => {
+      beginKingRound(kingState);
+    }, 4000);
+    return () => clearTimeout(timer);
+  }, [screen, kingState]);
+
+  useEffect(() => {
+    if (screen !== "tugIntro" || !tugState) return;
+    const timer = setTimeout(() => {
+      beginTugRound(tugState);
+    }, TUG_OF_WAR_INTRO_MS);
+    return () => clearTimeout(timer);
+  }, [screen, tugState]);
+
+  useEffect(() => {
+    if (screen !== "tugGame" || !tugState || feedback) return;
+    const timer = setInterval(() => {
+      let losingState = null;
+      let teacherPulled = false;
+      setTugState((current) => {
+        if (!current) return current;
+        const updated = resolveTugStateAtTime(current, Date.now());
+        if (updated !== current && Number(updated.ropePosition || 0) < Number(current.ropePosition || 0)) {
+          teacherPulled = true;
+        }
+        if (updated !== current && updated.ropePosition <= 0) {
+          losingState = updated;
+        }
+        return updated;
+      });
+      if (teacherPulled) {
+        triggerTugFlash("teacher");
+      }
+      if (losingState) {
+        finishTugRun("The teacher pulled the rope across.", losingState);
+      }
+    }, 250);
+    return () => clearInterval(timer);
+  }, [screen, tugState, feedback]);
+
+  useEffect(() => {
+    if (screen !== "freeFallGame" || !freeFallState || freeFallState.gameOver) return;
+
+    let lastTick = Date.now();
+    const timer = window.setInterval(() => {
+      const now = Date.now();
+      const deltaMs = now - lastTick;
+      lastTick = now;
+      setFreeFallState((current) => {
+        if (!current || current.gameOver) return current;
+
+        const elapsedMs = now - Number(current.startedAt || now);
+        const maxConcurrent = getFreeFallMaxConcurrent(elapsedMs);
+        let lives = Number(current.lives || FREE_FALL_START_LIVES);
+        let currentStreak = Number(current.currentStreak || 0);
+        let bestStreak = Number(current.bestStreak || 0);
+        const incorrectItems = [...(current.incorrectItems || [])];
+        const announcements = (current.announcements || []).filter((item) => Number(item.expiresAt || 0) > now);
+
+        const activeQuestions = [];
+        for (const question of current.activeQuestions || []) {
+          if (question.resolvedAt && now - question.resolvedAt > FREE_FALL_BOX_FLASH_MS) {
+            continue;
+          }
+
+          if (!question.resolvedAt) {
+            const nextProgress = Number(question.progress || 0) + deltaMs / Math.max(1, Number(question.durationMs || 1));
+            if (nextProgress >= 1) {
+              lives -= 1;
+              currentStreak = 0;
+              incorrectItems.push({
+                prompt: question.prompt,
+                expected: question.answer,
+                given: "",
+                correct: false,
+                strategy: tipFromQuestion(question),
+                reason: "Missed",
+              });
+              announcements.push({
+                id: `freefall-miss-${question.id}`,
+                text: "Life lost",
+                style: "miss",
+                expiresAt: now + 900,
+              });
+              activeQuestions.push({
+                ...question,
+                progress: 1,
+                resolvedAt: now,
+                flash: "miss",
+              });
+              continue;
+            }
+
+            activeQuestions.push({
+              ...question,
+              progress: nextProgress,
+            });
+            continue;
+          }
+
+          activeQuestions.push(question);
+        }
+
+        let nextSpawnAt = Number(current.nextSpawnAt || now);
+        while (activeQuestions.filter((question) => !question.resolvedAt).length < maxConcurrent && (activeQuestions.filter((question) => !question.resolvedAt).length === 0 || now >= nextSpawnAt)) {
+          const nextQuestion = buildFreeFallQuestion(activeQuestions, current.selectedMode, current.selectedLevel, elapsedMs);
+          if (!nextQuestion) break;
+          activeQuestions.push(nextQuestion);
+          nextSpawnAt = now + getFreeFallSpawnDelayMs(elapsedMs);
+        }
+
+        const nextState = {
+          ...current,
+          activeQuestions,
+          announcements,
+          incorrectItems,
+          lives,
+          currentStreak,
+          bestStreak: Math.max(bestStreak, currentStreak),
+          maxConcurrent,
+          nextSpawnAt,
+          elapsedSeconds: Math.max(0, Math.floor(elapsedMs / 1000)),
+          gameOver: lives <= 0,
+        };
+
+        return nextState;
+      });
+    }, 80);
+
+    return () => window.clearInterval(timer);
+  }, [screen, Boolean(freeFallState), freeFallState?.gameOver]);
+
+  useEffect(() => {
+    if (screen !== "freeFallGame" || !freeFallState?.gameOver) return;
+    finishFreeFallRun(freeFallState.failureReason || "Out of lives.", freeFallState);
+  }, [screen, freeFallState?.gameOver]);
 
   useEffect(() => {
     if (screen === "multiplayerWaiting" && multiplayerState?.waitTimeLeft > 0) {
@@ -1531,44 +3086,65 @@ export default function NSWProgressionsMathGame() {
     const interval = setInterval(() => {
       setMultiplayerState((current) => {
         if (!current || current.finished) return current;
+
         const nextElapsed = current.elapsedTime + 1;
+        let nextFinishOrdinal = current.nextFinishOrdinal || 1;
+
         const nextOpponents = current.opponents.map((opponent) => {
-          const previousProgress = opponent.progress;
-
-          if (opponent.isAdaptiveRival) {
-            let lockedPacePerSecond = opponent.lockedPacePerSecond;
-            if (current.playerScore >= 10 && !lockedPacePerSecond) {
-              lockedPacePerSecond = current.playerScore / Math.max(nextElapsed, 1);
-            }
-
-            let targetProgress;
-            if (lockedPacePerSecond) {
-              targetProgress = lockedPacePerSecond * nextElapsed;
-            } else {
-              const playerPace = current.playerScore / Math.max(nextElapsed, 1);
-              const chaseFactor = 0.92 + Math.random() * 0.16;
-              targetProgress = playerPace * nextElapsed * chaseFactor;
-            }
-
-            const randomNudge = Math.random() < 0.35 ? choice([0, 0, 1]) : 0;
-            const nextProgress = Math.min(
-              MULTIPLAYER_TARGET_SCORE,
-              Math.max(opponent.progress, Math.round(targetProgress + randomNudge))
-            );
-            return {
-              ...opponent,
-              progress: nextProgress,
-              burst: nextProgress > previousProgress,
-              lockedPacePerSecond,
-            };
+          if (opponent.finished) {
+            return { ...opponent, burst: false };
           }
 
-          const expectedProgress = Math.min(MULTIPLAYER_TARGET_SCORE, (nextElapsed / opponent.targetDuration) * MULTIPLAYER_TARGET_SCORE);
-          const randomNudge = Math.random() < 0.45 ? choice([0, 0, 1]) : 0;
-          const nextProgress = Math.min(MULTIPLAYER_TARGET_SCORE, Math.max(opponent.progress, Math.round(expectedProgress + randomNudge)));
-          return { ...opponent, progress: nextProgress, burst: nextProgress > previousProgress };
+          const previousProgress = opponent.progress;
+          let lockedPacePerSecond = opponent.lockedPacePerSecond;
+          let targetProgress = opponent.progress;
+          const livePlayerPace = current.playerScore / Math.max(nextElapsed, 1);
+
+          if (opponent.strategy === "questionTracker") {
+            if (current.playerScore >= 10 && !lockedPacePerSecond) {
+              lockedPacePerSecond = current.playerScore / Math.max(current.elapsedTime, 1);
+            }
+            const targetPace = lockedPacePerSecond || Math.max(0.35, livePlayerPace * (0.96 + Math.random() * 0.06));
+            targetProgress = targetPace * nextElapsed + (Math.random() < 0.3 ? 1 : 0);
+          } else if (opponent.strategy === "timeTracker") {
+            if (nextElapsed >= 10 && !lockedPacePerSecond) {
+              lockedPacePerSecond = (current.playerScore / 10) * 0.9;
+            }
+            const targetPace = lockedPacePerSecond || Math.max(0.35, livePlayerPace * 0.88);
+            targetProgress = targetPace * nextElapsed + (Math.random() < 0.2 ? 1 : 0);
+          } else {
+            const targetDuration = Math.max(60, Number(opponent.targetDuration) || 150);
+            const targetPace = MULTIPLAYER_TARGET_SCORE / targetDuration;
+            targetProgress = targetPace * nextElapsed + (Math.random() < 0.22 ? 1 : 0);
+          }
+
+          let progress = Math.max(opponent.progress, Math.min(MULTIPLAYER_TARGET_SCORE, Math.round(targetProgress)));
+          let finished = opponent.finished;
+          let finishOrdinal = opponent.finishOrdinal;
+
+          if (!finished && progress >= MULTIPLAYER_TARGET_SCORE) {
+            progress = MULTIPLAYER_TARGET_SCORE;
+            finished = true;
+            finishOrdinal = nextFinishOrdinal;
+            nextFinishOrdinal += 1;
+          }
+
+          return {
+            ...opponent,
+            progress,
+            burst: progress > previousProgress,
+            lockedPacePerSecond,
+            finished,
+            finishOrdinal,
+          };
         });
-        return { ...current, opponents: nextOpponents, elapsedTime: nextElapsed };
+
+        return {
+          ...current,
+          opponents: nextOpponents,
+          elapsedTime: nextElapsed,
+          nextFinishOrdinal,
+        };
       });
     }, 1000);
     return () => clearInterval(interval);
@@ -1596,15 +3172,43 @@ export default function NSWProgressionsMathGame() {
   }, []);
 
   useEffect(() => {
-    if (screen === "game" && inputRef.current) {
+    if ((screen === "game" || screen === "freeFallGame") && inputRef.current) {
       inputRef.current.focus();
       inputRef.current.select?.();
     }
   }, [screen, currentIndex, feedback, level]);
 
   useEffect(() => {
+    function handleCheatKeyShortcuts(event) {
+      if (!cheatModeActive || feedback) return;
+      if (screen !== "game" && screen !== "multiplayerGame" && screen !== "kingGame" && screen !== "tugGame") return;
+
+      const key = String(event.key || "").toLowerCase();
+      if (key !== "y" && key !== "n") return;
+
+      event.preventDefault();
+      if (screen === "multiplayerGame") {
+        applyMultiplayerRoundAnswer(key, key === "y");
+        return;
+      }
+      if (screen === "kingGame") {
+        applyKingAnswer(key, key === "y");
+        return;
+      }
+      if (screen === "tugGame") {
+        applyTugAnswer(key, key === "y");
+        return;
+      }
+      applySoloRoundAnswer(key, key === "y");
+    }
+
+    window.addEventListener("keydown", handleCheatKeyShortcuts);
+    return () => window.removeEventListener("keydown", handleCheatKeyShortcuts);
+  }, [cheatModeActive, feedback, screen, currentQuestion, currentIndex, results, questions, playerName]);
+
+  useEffect(() => {
     function keepFocusReady() {
-      if (screen === "game" && inputRef.current && document.activeElement !== inputRef.current) {
+      if ((screen === "game" || screen === "freeFallGame") && inputRef.current && document.activeElement !== inputRef.current) {
         inputRef.current.focus();
       }
     }
@@ -1624,22 +3228,26 @@ export default function NSWProgressionsMathGame() {
       const cleaned = { ...profile, activeBoosts };
       writeProfileState(cleaned);
       setProfileState(cleaned);
-      return activeBoosts.some((boost) => boost.type === "coinMultiplier2x") ? 2 : 1;
+      return activeBoosts.reduce((highest, boost) => Math.max(highest, getBoostMultiplierFromType(boost.type)), 1);
     }
-    return activeBoosts.some((boost) => boost.type === "coinMultiplier2x") ? 2 : 1;
+    return activeBoosts.reduce((highest, boost) => Math.max(highest, getBoostMultiplierFromType(boost.type)), 1);
   }
 
   function awardCoinsForRound(finalResults, options = {}) {
     const { testingModeActive = false, activeMode = mode } = options;
     const correctCount = finalResults.filter((r) => r.correct).length;
-    const bonus = correctCount === 15 ? 10 : correctCount === 14 ? 5 : 0;
+    const bonus = correctCount === roundQuestionCount ? 10 : correctCount === roundQuestionCount - 1 ? 5 : 0;
     const basePerQuestion = testingModeActive ? 2 : 1;
     const bonusMultiplier = testingModeActive ? 2 : 1;
-    const mixedModeMultiplier = activeMode === "mixed" ? MIXED_MODE_MULTIPLIER : 1;
-    const levelMatchMultiplier = getCurrentLevelMatchMultiplier(activeMode);
+    const practiseModeMultiplier = sessionType === "practice" ? getPracticeCoinMultiplier(activeMode, level) : 1;
+    const mixedModeMultiplier = sessionType === "practice" ? 1 : activeMode === "mixed" ? MIXED_MODE_MULTIPLIER : 1;
+    const levelMatchMultiplier = sessionType === "practice" ? 1 : getCurrentLevelMatchMultiplier(activeMode);
     const boostMultiplier = getActiveCoinMultiplier();
-    const baseCoins = Math.round(correctCount * basePerQuestion * mixedModeMultiplier * levelMatchMultiplier * boostMultiplier);
-    const bonusCoins = Math.round(bonus * bonusMultiplier * mixedModeMultiplier * levelMatchMultiplier * boostMultiplier);
+    const gameplayMultiplier = sessionType === "practice"
+      ? practiseModeMultiplier
+      : mixedModeMultiplier * levelMatchMultiplier;
+    const baseCoins = Math.round(correctCount * basePerQuestion * gameplayMultiplier * boostMultiplier);
+    const bonusCoins = Math.round(bonus * bonusMultiplier * gameplayMultiplier * boostMultiplier);
     const totalCoins = baseCoins + bonusCoins;
     const storedProfile = readProfileState();
     const nextProfile = {
@@ -1647,11 +3255,12 @@ export default function NSWProgressionsMathGame() {
       coins: (storedProfile.coins || 0) + totalCoins,
     };
     saveProfileState(nextProfile);
-    setRoundReward({ correctCount, baseCoins, bonusCoins, totalCoins, testingModeActive, boostMultiplier, mixedModeMultiplier, levelMatchMultiplier, activeMode });
+    setRoundReward({ correctCount, baseCoins, bonusCoins, totalCoins, testingModeActive, boostMultiplier, mixedModeMultiplier, practiseModeMultiplier, levelMatchMultiplier, activeMode, roundQuestionCount });
     if (testingModeActive) {
       setTestingCoinsEarned((current) => current + totalCoins);
     }
     window.setTimeout(() => setRoundReward((current) => current), BONUS_DISPLAY_MS);
+    return totalCoins;
   }
 
   function getCurrentLevelMatchMultiplier(activeMode = mode) {
@@ -1670,6 +3279,28 @@ export default function NSWProgressionsMathGame() {
     return 1;
   }
 
+  function getPracticeCoinMultiplier(activeMode = mode, activeLevel = level) {
+    const questionCount = Number(activeRoundConfig?.questionCount || DEFAULT_QUESTION_COUNT);
+    const isHundredQuestionRound = questionCount >= 100;
+    const isCurrentSavedLevel = (() => {
+      if (activeMode === "addsub") return activeLevel === userHistory.addsubLevel;
+      if (activeMode === "muldiv") return activeLevel === userHistory.muldivLevel;
+      if (activeMode === "mixed") {
+        return Boolean(
+          activeLevel &&
+          typeof activeLevel === "object" &&
+          activeLevel.addsubLevel === userHistory.addsubLevel &&
+          activeLevel.muldivLevel === userHistory.muldivLevel
+        );
+      }
+      return false;
+    })();
+
+    if (isHundredQuestionRound) return 3;
+    if (isCurrentSavedLevel) return 2;
+    return 1;
+  }
+
   function saveProfileState(nextProfile) {
     writeProfileState(nextProfile);
     setProfileState(nextProfile);
@@ -1680,6 +3311,8 @@ export default function NSWProgressionsMathGame() {
   }
 
   function beginEditingPlayerName() {
+    setShowPasswordEntry(false);
+    setPasswordPanelMode(null);
     setDraftPlayerName(playerName);
     setIsEditingPlayerName(true);
     window.setTimeout(() => playerNameInputRef.current?.focus(), 0);
@@ -1698,16 +3331,6 @@ export default function NSWProgressionsMathGame() {
     setIsEditingPlayerName(false);
   }
 
-  function handleCheatLetterClick(letter) {
-    setCheatSequence((current) => {
-      const next = `${current}${letter}`.slice(-3);
-      if (next === "POW") {
-        setCheatModeActive((active) => !active);
-        return "";
-      }
-      return "POW".startsWith(next) ? next : letter === "P" ? "P" : "";
-    });
-  }
 
   function clearAllData() {
     if (typeof window === "undefined") return;
@@ -1717,6 +3340,9 @@ export default function NSWProgressionsMathGame() {
     window.localStorage.removeItem(THEME_STORAGE_KEY);
     window.localStorage.removeItem(TESTING_SCORE_STORAGE_KEY);
     window.localStorage.removeItem(TESTING_UNLOCK_STORAGE_KEY);
+    window.localStorage.removeItem(MULTIPLAYER_BESTS_STORAGE_KEY);
+    window.localStorage.removeItem(STATS_STORAGE_KEY);
+    window.localStorage.removeItem(TIME_TRIAL_HISTORY_STORAGE_KEY);
     setProfileState({ coins: 0, ownedItems: [], equippedItems: [], activeBoosts: [] });
     setUserHistory({ addsubLevel: "AdS3", muldivLevel: "MuS3" });
     setTestingScores({ addsubScore: null, muldivScore: null });
@@ -1728,6 +3354,7 @@ export default function NSWProgressionsMathGame() {
     setPurchasedItemsOpen(false);
     setTestingCoinsEarned(0);
     setMultiplayerState(null);
+    setFreeFallState(null);
     setMode(null);
     setLevel(null);
     setMixedSelection({ addsubLevel: null, muldivLevel: null });
@@ -1738,8 +3365,12 @@ export default function NSWProgressionsMathGame() {
     setAnswer("");
     setFeedback(null);
     setRoundFinished(false);
-    setTimeLeft(ROUND_TIME);
+    setTimeLeft(DEFAULT_ROUND_TIME);
     setPendingTestingExitConfirm(false);
+    setGeneratedSaveCode("");
+    setSaveCodeInput("");
+    setSaveCodeStatus("");
+    setHistoryRefreshKey((current) => current + 1);
     setScreen("home");
   }
 
@@ -1761,21 +3392,43 @@ export default function NSWProgressionsMathGame() {
     const item = PROFILE_SHOP_ITEMS.find((entry) => entry.id === itemId);
     if (!item) return;
     const storedProfile = readProfileState();
-    if ((storedProfile.ownedItems || []).includes(itemId) && item.category !== "upgrades") {
+
+    if (item.achievementOnly && !isAchievementUnlocked(item, achievementMetrics)) {
+      return;
+    }
+
+    if ((storedProfile.ownedItems || []).includes(itemId)) {
+      if (item.category === "upgrades") {
+        activateUpgrade(item);
+        return;
+      }
       toggleEquipItem(itemId);
       return;
     }
-    if (!cheatModeActive && (storedProfile.coins || 0) < item.cost) return;
 
-    const alreadyOwned = (storedProfile.ownedItems || []).includes(itemId);
+    const shouldChargeCoins = !item.achievementOnly && !cheatModeActive;
+    if (shouldChargeCoins && (storedProfile.coins || 0) < item.cost) return;
+
     const nextProfile = {
       ...storedProfile,
-      coins: cheatModeActive ? storedProfile.coins : storedProfile.coins - item.cost,
-      ownedItems: alreadyOwned ? (storedProfile.ownedItems || []) : [...(storedProfile.ownedItems || []), itemId],
+      coins: shouldChargeCoins ? storedProfile.coins - item.cost : storedProfile.coins,
+      ownedItems: [...new Set([...(storedProfile.ownedItems || []), itemId])],
       equippedItems: storedProfile.equippedItems || [],
     };
 
     saveProfileState(nextProfile);
+
+    if (shouldChargeCoins && item.cost > 0) {
+      recordStatsEntry({
+        mode: "shop",
+        durationSeconds: 0,
+        correctAnswers: 0,
+        raceTimeSeconds: null,
+        coinsEarned: 0,
+        coinsSpent: item.cost,
+      });
+      setHistoryRefreshKey((current) => current + 1);
+    }
 
     if (item.category === "upgrades") {
       activateUpgrade(item);
@@ -1806,7 +3459,7 @@ export default function NSWProgressionsMathGame() {
   }
 
   function startMode(selectedMode) {
-    if (selectedMode === "multiplayer" && !hasCompletedTesting) {
+    if ((selectedMode === "multiplayer" || selectedMode === "timetrial" || selectedMode === "king" || selectedMode === "tug") && !hasAnyPlacement) {
       return;
     }
     if (selectedMode === "testing") {
@@ -1814,30 +3467,103 @@ export default function NSWProgressionsMathGame() {
       return;
     }
     if (selectedMode === "multiplayer") {
+      setSessionType("multiplayer");
       setMode("multiplayer");
       setScreen("multiplayerSelect");
       return;
     }
+    if (selectedMode === "timetrial") {
+      setSessionType("timetrial");
+      setMode("timetrial");
+      setScreen("timeTrialSelect");
+      return;
+    }
+    if (selectedMode === "king") {
+      setSessionType("king");
+      setMode("king");
+      setScreen("kingSelect");
+      return;
+    }
+    if (selectedMode === "tug") {
+      setSessionType("tug");
+      setMode("tug");
+      setScreen("tugSelect");
+      return;
+    }
+    if (selectedMode === "freefall") {
+      setSessionType("freefall");
+      setMode("freefall");
+      setScreen("freeFallSelect");
+      return;
+    }
+    setSessionType("practice");
     setMode(selectedMode);
     setMixedSelection({ addsubLevel: null, muldivLevel: null });
     setScreen("levels");
   }
 
-  function startTestingMode() {
+  function startTestingMode(runType = "mixed", chosenStart = null) {
     setTestingCoinsEarned(0);
     const history = readUserHistory();
     setUserHistory(history);
+
+    const addsubStart = runType === "mixed"
+      ? (chosenStart?.addsubLevel || history.addsubLevel || "AdS3")
+      : runType === "addsub"
+      ? (chosenStart || history.addsubLevel || "AdS3")
+      : (history.addsubLevel || "AdS3");
+
+    const muldivStart = runType === "mixed"
+      ? (chosenStart?.muldivLevel || history.muldivLevel || "MuS3")
+      : runType === "muldiv"
+      ? (chosenStart || history.muldivLevel || "MuS3")
+      : (history.muldivLevel || "MuS3");
+
+    const isMulOnly = runType === "muldiv";
+    const initialLevel = isMulOnly ? muldivStart : addsubStart;
     const initialTestingState = {
-      phase: "addsub",
-      startLevel: history.addsubLevel || "AdS3",
-      currentLevel: history.addsubLevel || "AdS3",
+      phase: isMulOnly ? "muldiv" : "addsub",
+      startLevel: initialLevel,
+      currentLevel: initialLevel,
       adsResolvedLevel: null,
       musResolvedLevel: null,
       lastScore: null,
+      runType,
+      manualStart: { addsubLevel: addsubStart, muldivLevel: muldivStart },
+      retryUsedLevels: {},
+      pendingRetry: null,
     };
+
+    setTestingStartSelector(null);
     setTestingState(initialTestingState);
+    setSessionType("testing");
     setMode("testing");
-    startLevel(history.addsubLevel || "AdS3", { selectedMode: "testing", testing: initialTestingState });
+    startLevel(initialLevel, { selectedMode: "testing", testing: initialTestingState });
+  }
+
+  function startTimeTrialMode(selectedTimeTrialMode) {
+    const history = readUserHistory();
+    setUserHistory(history);
+    const selectedLevel = getMultiplayerLevelFromMode(selectedTimeTrialMode, history);
+    setMode("timetrial");
+    setLevel(selectedLevel);
+    setActiveRoundConfig({ questionCount: TIME_TRIAL_QUESTION_BUFFER, timeLimit: TIME_TRIAL_SECONDS, coinMultiplier: 1 });
+    setQuestions(Array.from({ length: TIME_TRIAL_QUESTION_BUFFER }, () => generateQuestion(selectedTimeTrialMode, selectedLevel)));
+    setCurrentIndex(0);
+    setTimeLeft(TIME_TRIAL_SECONDS);
+    setAnswer("");
+    setFeedback(null);
+    setResults([]);
+    setRoundFinished(false);
+    setPendingTestingExitConfirm(false);
+    setTimeTrialCountdown(0);
+    setTimeTrialState({
+      selectedMode: selectedTimeTrialMode,
+      selectedLevel,
+      levelLabel: getTimeTrialLevelLabel(selectedTimeTrialMode, selectedLevel),
+      startedAt: Date.now(),
+    });
+    setScreen("game");
   }
 
   function startMultiplayerLobby(selectedMultiplayerMode) {
@@ -1847,7 +3573,7 @@ export default function NSWProgressionsMathGame() {
       selectedMode: selectedMultiplayerMode,
       raceLevel,
       waitTimeLeft: MULTIPLAYER_WAIT_SECONDS,
-      opponents: buildFakeMultiplayerOpponents(),
+      opponents: buildFakeMultiplayerOpponents(selectedMultiplayerMode, raceLevel),
       playerScore: 0,
       elapsedTime: 0,
       finished: false,
@@ -1856,6 +3582,8 @@ export default function NSWProgressionsMathGame() {
       placementNumber: null,
       placementBonus: 0,
       playerCoinsEarned: 0,
+      playerFinishOrdinal: null,
+      nextFinishOrdinal: 1,
     });
     setScreen("multiplayerWaiting");
   }
@@ -1863,6 +3591,7 @@ export default function NSWProgressionsMathGame() {
   function startMultiplayerRace() {
     setMultiplayerState((current) => {
       if (!current) return current;
+      setActiveRoundConfig({ questionCount: 120, timeLimit: DEFAULT_ROUND_TIME, coinMultiplier: 1 });
       setQuestions(Array.from({ length: 120 }, () => generateQuestion(current.selectedMode, current.raceLevel)));
       setCurrentIndex(0);
       setAnswer("");
@@ -1886,6 +3615,444 @@ export default function NSWProgressionsMathGame() {
     });
   }
 
+  function beginKingRound(nextKingState) {
+    setLevel(nextKingState.selectedLevel);
+    setActiveRoundConfig({ questionCount: KING_OF_THE_HILL_ROUND_SIZE, timeLimit: nextKingState.timePerQuestion, coinMultiplier: 1 });
+    setQuestions(buildRound(nextKingState.selectedMode, nextKingState.selectedLevel, KING_OF_THE_HILL_ROUND_SIZE));
+    setCurrentIndex(0);
+    setTimeLeft(nextKingState.timePerQuestion);
+    setAnswer("");
+    setFeedback(null);
+    setRoundFinished(false);
+    setPendingTestingExitConfirm(false);
+    setScreen("kingGame");
+  }
+
+  function startKingMode(selectedKingMode) {
+    const history = readUserHistory();
+    setUserHistory(history);
+    const selectedLevel = getMultiplayerLevelFromMode(selectedKingMode, history);
+    const initialKingState = {
+      selectedMode: selectedKingMode,
+      selectedLevel,
+      levelLabel: getTimeTrialLevelLabel(selectedKingMode, selectedLevel),
+      roundNumber: 1,
+      completedRounds: 0,
+      timePerQuestion: KING_OF_THE_HILL_START_SECONDS,
+      challenger: createKingChallenger(),
+      intermissionStep: 0,
+      intermissionLabel: null,
+      failureReason: null,
+      coinsEarned: 0,
+      startedAt: Date.now(),
+      beatenOpponents: [],
+    };
+    setResults([]);
+    setKingState(initialKingState);
+    setKingIntroDeadline(Date.now() + 4000);
+    setScreen("kingIntro");
+  }
+
+  function startTugMode(selectedTugMode) {
+    const history = readUserHistory();
+    setUserHistory(history);
+    const selectedLevel = getMultiplayerLevelFromMode(selectedTugMode, history);
+    const initialTugState = {
+      selectedMode: selectedTugMode,
+      selectedLevel,
+      levelLabel: getTimeTrialLevelLabel(selectedTugMode, selectedLevel),
+      roundNumber: 1,
+      completedRounds: 0,
+      ropePosition: TUG_OF_WAR_ROPE_START,
+      playerPullAmount: TUG_OF_WAR_PLAYER_PULL,
+      aiPullAmount: getTugAIPullAmount(1),
+      aiPullEveryMs: getTugAIPullInterval(1),
+      nextAIPullAt: Date.now() + getTugAIPullInterval(1),
+      challenger: createTugTeacher(0),
+      startedAt: Date.now(),
+      roundStartedAt: null,
+      totalCorrectAnswers: 0,
+      roundCorrectAnswers: 0,
+      beatenTeachers: [],
+      failureReason: null,
+      coinsEarned: 0,
+      totalDurationSeconds: 0,
+      victory: false,
+    };
+    setResults([]);
+    setTugState(initialTugState);
+    setTugIntroDeadline(Date.now() + TUG_OF_WAR_INTRO_MS);
+    setScreen("tugIntro");
+  }
+
+  function beginTugRound(nextTugState) {
+    setMode("tug");
+    setLevel(nextTugState.selectedLevel);
+    setActiveRoundConfig({ questionCount: TUG_OF_WAR_ROUND_BUFFER, timeLimit: DEFAULT_ROUND_TIME, coinMultiplier: 1 });
+    setQuestions(buildRound(nextTugState.selectedMode, nextTugState.selectedLevel, TUG_OF_WAR_ROUND_BUFFER));
+    setCurrentIndex(0);
+    setAnswer("");
+    setFeedback(null);
+    setPendingTestingExitConfirm(false);
+    setRoundFinished(false);
+    const now = Date.now();
+    setTugState({
+      ...nextTugState,
+      ropePosition: TUG_OF_WAR_ROPE_START,
+      roundCorrectAnswers: 0,
+      roundStartedAt: now,
+      nextAIPullAt: now + Number(nextTugState.aiPullEveryMs || getTugAIPullInterval(nextTugState.roundNumber || 1)),
+    });
+    setScreen("tugGame");
+  }
+
+  function handleTugRoundWin(currentTugState) {
+    if (!currentTugState) return;
+    const roundSeconds = Math.max(1, Math.round((Date.now() - Number(currentTugState.roundStartedAt || Date.now())) / 1000));
+    const roundSummary = {
+      ...(currentTugState.challenger || {}),
+      roundNumber: currentTugState.roundNumber,
+      durationSeconds: roundSeconds,
+      correctAnswers: currentTugState.roundCorrectAnswers,
+      averageSecondsPerCorrect: currentTugState.roundCorrectAnswers > 0 ? roundSeconds / currentTugState.roundCorrectAnswers : roundSeconds,
+    };
+    const beatenTeachers = [...(currentTugState.beatenTeachers || []), roundSummary];
+    const completedRounds = beatenTeachers.length;
+
+    if (completedRounds >= TUG_OF_WAR_TOTAL_ROUNDS) {
+      finishTugRun("You beat all 10 teachers.", {
+        ...currentTugState,
+        beatenTeachers,
+        completedRounds,
+        victory: true,
+      });
+      return;
+    }
+
+    const nextRound = completedRounds + 1;
+    const nextState = {
+      ...currentTugState,
+      beatenTeachers,
+      completedRounds,
+      roundNumber: nextRound,
+      ropePosition: TUG_OF_WAR_ROPE_START,
+      roundCorrectAnswers: 0,
+      aiPullAmount: getTugAIPullAmount(nextRound),
+      aiPullEveryMs: getTugAIPullInterval(nextRound),
+      challenger: createTugTeacher(nextRound - 1),
+    };
+    setTugState(nextState);
+    setTugIntroDeadline(Date.now() + TUG_OF_WAR_INTRO_MS);
+    setScreen("tugIntro");
+  }
+
+  function startFreeFallMode(selectedFreeFallMode) {
+    const history = readUserHistory();
+    setUserHistory(history);
+    const selectedLevel = getMultiplayerLevelFromMode(selectedFreeFallMode, history);
+    const startedAt = Date.now();
+    setMode("freefall");
+    setLevel(selectedLevel);
+    setAnswer("");
+    setFeedback(null);
+    setResults([]);
+    setPendingTestingExitConfirm(false);
+    setFreeFallState({
+      selectedMode: selectedFreeFallMode,
+      selectedLevel,
+      levelLabel: getTimeTrialLevelLabel(selectedFreeFallMode, selectedLevel),
+      startedAt,
+      elapsedSeconds: 0,
+      lives: FREE_FALL_START_LIVES,
+      correctAnswers: 0,
+      incorrectItems: [],
+      activeQuestions: [],
+      nextSpawnAt: startedAt,
+      maxConcurrent: 1,
+      currentStreak: 0,
+      bestStreak: 0,
+      announcements: [],
+      gameOver: false,
+      coinsEarned: 0,
+    });
+    setScreen("freeFallGame");
+  }
+
+  function applyFreeFallAnswer(rawAnswer) {
+    const cleaned = String(rawAnswer || "").trim();
+    if (!cleaned) return;
+
+    const now = Date.now();
+    let matched = false;
+    setFreeFallState((current) => {
+      if (!current || current.gameOver) return current;
+      const activeIndex = (current.activeQuestions || []).findIndex((question) => !question.resolvedAt && answersMatch(cleaned, question.answer));
+      if (activeIndex < 0) return current;
+
+      matched = true;
+      const targetQuestion = current.activeQuestions[activeIndex];
+      const bonusLife = Boolean(targetQuestion.isSpecial && now <= Number(targetQuestion.goldUntil || 0));
+      const nextStreak = Number(current.currentStreak || 0) + 1;
+
+      return {
+        ...current,
+        lives: Number(current.lives || 0) + (bonusLife ? 1 : 0),
+        correctAnswers: Number(current.correctAnswers || 0) + 1,
+        currentStreak: nextStreak,
+        bestStreak: Math.max(Number(current.bestStreak || 0), nextStreak),
+        announcements: [
+          ...(current.announcements || []).filter((item) => Number(item.expiresAt || 0) > now),
+          ...(bonusLife ? [{ id: `freefall-life-${targetQuestion.id}`, text: "+1 Life", style: "life", expiresAt: now + 1200 }] : []),
+        ],
+        activeQuestions: current.activeQuestions.map((question, index) => {
+          if (index !== activeIndex) return question;
+          return {
+            ...question,
+            resolvedAt: now,
+            flash: "correct",
+          };
+        }),
+      };
+    });
+
+    setAnswer("");
+  }
+
+  function finishFreeFallRun(reason = "Out of lives.", stateOverride = freeFallState) {
+    const finalFreeFallState = stateOverride || freeFallState;
+    if (!finalFreeFallState) return;
+
+    const totalCorrect = Number(finalFreeFallState.correctAnswers || 0);
+    const totalDurationSeconds = Math.max(1, Math.round((Date.now() - Number(finalFreeFallState.startedAt || Date.now())) / 1000));
+    const boostMultiplier = getActiveCoinMultiplier();
+    const totalCoins = Math.round(totalCorrect * boostMultiplier);
+    const storedProfile = readProfileState();
+    saveProfileState({ ...storedProfile, coins: (storedProfile.coins || 0) + totalCoins });
+    setRoundReward({
+      correctCount: totalCorrect,
+      baseCoins: totalCoins,
+      bonusCoins: 0,
+      totalCoins,
+      testingModeActive: false,
+      boostMultiplier,
+      mixedModeMultiplier: 1,
+      levelMatchMultiplier: 1,
+      activeMode: "freefall",
+      roundQuestionCount: totalCorrect,
+    });
+    recordStatsEntry({
+      mode: `freefall-${finalFreeFallState.selectedMode}`,
+      durationSeconds: totalDurationSeconds,
+      correctAnswers: totalCorrect,
+      raceTimeSeconds: null,
+      coinsEarned: totalCoins,
+      bestStreak: Number(finalFreeFallState.bestStreak || 0),
+    });
+    recordFreeFallHistoryEntry({
+      selectedMode: finalFreeFallState.selectedMode,
+      levelLabel: finalFreeFallState.levelLabel,
+      timeSurvivedSeconds: totalDurationSeconds,
+      correctAnswers: totalCorrect,
+      ts: Date.now(),
+    });
+    const nextFreeFallHighScoreSeconds = Math.max(
+      totalDurationSeconds,
+      ...readFreeFallHistory().map((entry) => Number(entry?.timeSurvivedSeconds || 0))
+    );
+    setHistoryRefreshKey((current) => current + 1);
+    setFreeFallState({
+      ...finalFreeFallState,
+      failureReason: reason,
+      coinsEarned: totalCoins,
+      elapsedSeconds: totalDurationSeconds,
+      gameOver: true,
+      activeQuestions: [],
+      highScoreSeconds: nextFreeFallHighScoreSeconds,
+    });
+    setScreen("freeFallResults");
+  }
+
+  function finishTugRun(reason = "The teacher pulled the rope across.", stateOverride = tugState) {
+    const finalTugState = stateOverride || tugState;
+    if (!finalTugState) return;
+    const totalCorrect = Number(finalTugState.totalCorrectAnswers || 0);
+    const totalDurationSeconds = Math.max(1, Math.round((Date.now() - Number(finalTugState.startedAt || Date.now())) / 1000));
+    const boostMultiplier = getActiveCoinMultiplier();
+    const totalCoins = Math.round(((finalTugState.beatenTeachers || []).length * 15 + totalCorrect) * boostMultiplier);
+    const storedProfile = readProfileState();
+    saveProfileState({ ...storedProfile, coins: (storedProfile.coins || 0) + totalCoins });
+    setRoundReward({
+      correctCount: totalCorrect,
+      baseCoins: totalCoins,
+      bonusCoins: 0,
+      totalCoins,
+      testingModeActive: false,
+      boostMultiplier,
+      mixedModeMultiplier: 1,
+      levelMatchMultiplier: 1,
+      activeMode: "tug",
+      roundQuestionCount: totalCorrect,
+    });
+    recordStatsEntry({
+      mode: `tug-${finalTugState.selectedMode}`,
+      durationSeconds: totalDurationSeconds,
+      correctAnswers: totalCorrect,
+      raceTimeSeconds: null,
+      coinsEarned: totalCoins,
+      bestStreak: getLongestCorrectStreak(results),
+    });
+    setHistoryRefreshKey((current) => current + 1);
+    setTugState({
+      ...finalTugState,
+      failureReason: reason,
+      coinsEarned: totalCoins,
+      totalDurationSeconds,
+      victory: Boolean(finalTugState.victory),
+    });
+    setScreen("tugResults");
+  }
+
+  function applyTugAnswer(cleanedAnswer, forcedCorrect = null) {
+    if (!currentQuestion || feedback || !tugState) return;
+
+    const cleaned = String(cleanedAnswer || "").trim();
+    const isCorrect = forcedCorrect === null ? answersMatch(cleaned, currentQuestion.answer) : forcedCorrect;
+    const entry = {
+      prompt: currentQuestion.prompt,
+      expected: currentQuestion.answer,
+      given: cleaned,
+      correct: isCorrect,
+      strategy: tipFromQuestion(currentQuestion),
+    };
+    const newResults = [...results, entry];
+    setResults(newResults);
+    setFeedback(isCorrect ? "correct" : "incorrect");
+
+    const resolvedTugState = resolveTugStateAtTime(tugState, Date.now());
+    let updatedTugState = resolvedTugState;
+    let roundWon = false;
+
+    if (resolvedTugState !== tugState) {
+      setTugState(resolvedTugState);
+    }
+
+    if (resolvedTugState?.ropePosition <= 0) {
+      triggerTugFlash("teacher");
+      finishTugRun("The teacher pulled the rope across.", resolvedTugState);
+      return;
+    }
+
+    if (isCorrect) {
+      const nextPosition = Math.min(100, Number(resolvedTugState.ropePosition || TUG_OF_WAR_ROPE_START) + Number(resolvedTugState.playerPullAmount || TUG_OF_WAR_PLAYER_PULL));
+      updatedTugState = {
+        ...resolvedTugState,
+        ropePosition: nextPosition,
+        roundCorrectAnswers: Number(resolvedTugState.roundCorrectAnswers || 0) + 1,
+        totalCorrectAnswers: Number(resolvedTugState.totalCorrectAnswers || 0) + 1,
+      };
+      roundWon = nextPosition >= 100;
+      setTugState(updatedTugState);
+      triggerTugFlash("player");
+    }
+
+    setTimeout(() => {
+      setFeedback(null);
+      setAnswer("");
+      if (roundWon) {
+        handleTugRoundWin(updatedTugState);
+        return;
+      }
+      setCurrentIndex((index) => (index + 1 >= questions.length ? 0 : index + 1));
+    }, 320);
+  }
+
+  function triggerKingIntermission(finalResults) {
+    setResults(finalResults);
+    setKingState((current) => current ? {
+      ...current,
+      completedRounds: current.roundNumber,
+      beatenOpponents: [
+        ...(current.beatenOpponents || []),
+        {
+          ...(current.challenger || {}),
+          roundNumber: current.roundNumber,
+        },
+      ],
+      intermissionStep: 0,
+      intermissionLabel: KING_OF_THE_HILL_INTERMISSION_STEPS[0],
+    } : current);
+    setScreen("kingIntermission");
+  }
+
+  function finishKingRun(reason = "Time ran out") {
+    const currentKingState = kingState;
+    if (!currentKingState) return;
+
+    const totalCorrect = results.filter((item) => item.correct).length;
+    const boostMultiplier = getActiveCoinMultiplier();
+    const totalCoins = Math.round((totalCorrect + (currentKingState.completedRounds || 0) * 10) * boostMultiplier);
+    const storedProfile = readProfileState();
+    saveProfileState({ ...storedProfile, coins: (storedProfile.coins || 0) + totalCoins });
+    setRoundReward({
+      correctCount: totalCorrect,
+      baseCoins: totalCoins,
+      bonusCoins: 0,
+      totalCoins,
+      testingModeActive: false,
+      boostMultiplier,
+      mixedModeMultiplier: 1,
+      levelMatchMultiplier: 1,
+      activeMode: "king",
+      roundQuestionCount: results.length,
+    });
+    recordStatsEntry({
+      mode: `king-${currentKingState.selectedMode}`,
+      durationSeconds: Math.max(1, Math.round((Date.now() - Number(currentKingState.startedAt || Date.now())) / 1000)),
+      correctAnswers: totalCorrect,
+      raceTimeSeconds: null,
+      coinsEarned: totalCoins,
+      bestStreak: getLongestCorrectStreak(results),
+    });
+    setHistoryRefreshKey((current) => current + 1);
+    setKingState({
+      ...currentKingState,
+      failureReason: reason,
+      coinsEarned: totalCoins,
+    });
+    setScreen("kingResults");
+  }
+
+  function applyKingAnswer(cleanedAnswer, forcedCorrect = null) {
+    if (!currentQuestion || feedback || !kingState) return;
+
+    const cleaned = String(cleanedAnswer || "").trim();
+    const isCorrect = forcedCorrect === null ? answersMatch(cleaned, currentQuestion.answer) : forcedCorrect;
+    const entry = {
+      prompt: currentQuestion.prompt,
+      expected: currentQuestion.answer,
+      given: cleaned,
+      correct: isCorrect,
+      strategy: tipFromQuestion(currentQuestion),
+    };
+    const newResults = [...results, entry];
+    setResults(newResults);
+    setFeedback(isCorrect ? "correct" : "incorrect");
+
+    setTimeout(() => {
+      setFeedback(null);
+      setAnswer("");
+      const nextIndex = currentIndex + 1;
+      if (nextIndex >= KING_OF_THE_HILL_ROUND_SIZE) {
+        triggerKingIntermission(newResults);
+        return;
+      }
+      setCurrentIndex(nextIndex);
+      if (isCorrect) {
+        setTimeLeft(kingState.timePerQuestion);
+      }
+    }, 320);
+  }
+
   function startMixedLevelSelection(levelType, selectedLevel) {
     const nextSelection = {
       ...mixedSelection,
@@ -1900,10 +4067,14 @@ export default function NSWProgressionsMathGame() {
     if (options.testing) {
       setTestingState(options.testing);
     }
+    const nextRoundConfig = options.roundConfig || (sessionType === "practice"
+      ? (PRACTISE_ROUND_OPTIONS[practiseQuestionCount] || PRACTISE_ROUND_OPTIONS[15])
+      : { questionCount: DEFAULT_QUESTION_COUNT, timeLimit: DEFAULT_ROUND_TIME, coinMultiplier: 1 });
+    setActiveRoundConfig(nextRoundConfig);
     setLevel(selectedLevel);
-    setQuestions(buildRound(activeMode === "testing" ? activeTestingState?.phase || "addsub" : activeMode, selectedLevel));
+    setQuestions(buildRound(activeMode === "testing" ? activeTestingState?.phase || "addsub" : activeMode, selectedLevel, nextRoundConfig.questionCount));
     setCurrentIndex(0);
-    setTimeLeft(ROUND_TIME);
+    setTimeLeft(nextRoundConfig.timeLimit);
     setPendingTestingExitConfirm(false);
     setAnswer("");
     setFeedback(null);
@@ -1915,7 +4086,44 @@ export default function NSWProgressionsMathGame() {
   function finishRound(finalResults = results) {
     setRoundFinished(true);
     setResults(finalResults);
-    awardCoinsForRound(finalResults, { testingModeActive: mode === "testing", activeMode: mode === "testing" ? testingState?.phase || "addsub" : mode });
+
+    if (mode === "timetrial") {
+      const correctCount = finalResults.filter((r) => r.correct).length;
+      const boostMultiplier = getActiveCoinMultiplier();
+      const totalCoins = Math.round(correctCount * boostMultiplier);
+      const storedProfile = readProfileState();
+      saveProfileState({ ...storedProfile, coins: (storedProfile.coins || 0) + totalCoins });
+      setRoundReward({ correctCount, baseCoins: totalCoins, bonusCoins: 0, totalCoins, testingModeActive: false, boostMultiplier, mixedModeMultiplier: 1, levelMatchMultiplier: 1, activeMode: "timetrial" });
+      recordStatsEntry({
+        mode: `timeTrial-${timeTrialState?.selectedMode || "addsub"}`,
+        durationSeconds: Math.max(0, currentRoundTime - timeLeft),
+        correctAnswers: correctCount,
+        raceTimeSeconds: null,
+        coinsEarned: totalCoins,
+        bestStreak: getLongestCorrectStreak(finalResults),
+      });
+      recordTimeTrialHistoryEntry({
+        selectedMode: timeTrialState?.selectedMode || "addsub",
+        levelLabel: timeTrialState?.levelLabel || getTimeTrialLevelLabel(timeTrialState?.selectedMode || "addsub", timeTrialState?.selectedLevel || level),
+        correctAnswers: correctCount,
+        totalAnswered: finalResults.length,
+        ts: Date.now(),
+      });
+      setHistoryRefreshKey((current) => current + 1);
+      setScreen("timeTrialResults");
+      return;
+    }
+
+    const earnedCoins = awardCoinsForRound(finalResults, { testingModeActive: mode === "testing", activeMode: mode === "testing" ? testingState?.phase || "addsub" : mode });
+    recordStatsEntry({
+      mode: mode === "testing" ? `testing-${testingState?.phase || "addsub"}` : mode,
+      durationSeconds: Math.max(0, currentRoundTime - timeLeft),
+      correctAnswers: finalResults.filter((r) => r.correct).length,
+      raceTimeSeconds: null,
+      coinsEarned: earnedCoins,
+      bestStreak: getLongestCorrectStreak(finalResults),
+    });
+    setHistoryRefreshKey((current) => current + 1);
 
     if (mode === "testing") {
       handleTestingRoundComplete(finalResults);
@@ -1937,9 +4145,90 @@ export default function NSWProgressionsMathGame() {
     setTestingScores(updated);
   }
 
+  function completeSingleTestingPhase(phaseKey, resolvedLevel, scoreValue, stateOverride = testingState) {
+    const baseState = stateOverride || testingState || {};
+    if (phaseKey === "addsub") {
+      updateStoredLevels({ addsubLevel: resolvedLevel });
+      updateTestingScores({ addsubScore: scoreValue });
+      setTestingState({ ...baseState, adsResolvedLevel: resolvedLevel, lastScore: scoreValue, pendingRetry: null });
+    } else {
+      updateStoredLevels({ muldivLevel: resolvedLevel });
+      updateTestingScores({ muldivScore: scoreValue });
+      setTestingState({ ...baseState, musResolvedLevel: resolvedLevel, lastScore: scoreValue, pendingRetry: null });
+    }
+    writeTestingUnlock(true);
+    setHasCompletedTesting(true);
+    setScreen("testingComplete");
+  }
+
+  function resolveTestingHoldScore(scoreValue, phase, runType, currentTestingLevel, stateOverride = testingState) {
+    const baseState = stateOverride || testingState || {};
+
+    if (phase === "addsub" && runType === "mixed") {
+      updateStoredLevels({ addsubLevel: currentTestingLevel });
+      updateTestingScores({ addsubScore: scoreValue });
+      const history = readUserHistory();
+      const muldivStart = baseState?.manualStart?.muldivLevel || history.muldivLevel || "MuS3";
+      const nextTestingState = {
+        ...baseState,
+        phase: "muldiv",
+        adsResolvedLevel: currentTestingLevel,
+        currentLevel: muldivStart,
+        startLevel: muldivStart,
+        lastScore: scoreValue,
+        pendingRetry: null,
+      };
+      setTestingState(nextTestingState);
+      startLevel(nextTestingState.currentLevel, { selectedMode: "testing", testing: nextTestingState });
+      return;
+    }
+
+    if (phase === "muldiv" && runType === "mixed") {
+      updateStoredLevels({ muldivLevel: currentTestingLevel });
+      updateTestingScores({ muldivScore: scoreValue });
+      writeTestingUnlock(true);
+      setHasCompletedTesting(true);
+      setTestingState({ ...baseState, musResolvedLevel: currentTestingLevel, lastScore: scoreValue, pendingRetry: null });
+      setScreen("testingComplete");
+      return;
+    }
+
+    completeSingleTestingPhase(phase, currentTestingLevel, scoreValue, { ...baseState, pendingRetry: null });
+  }
+
+  function retryCloseCallTestingLevel() {
+    if (!testingState?.pendingRetry) return;
+    const pending = testingState.pendingRetry;
+    const retryKey = `${pending.phase}:${pending.level}`;
+    const nextTestingState = {
+      ...testingState,
+      retryUsedLevels: {
+        ...(testingState.retryUsedLevels || {}),
+        [retryKey]: true,
+      },
+      pendingRetry: null,
+      lastScore: pending.score,
+    };
+    setTestingState(nextTestingState);
+    startLevel(pending.level, { selectedMode: "testing", testing: nextTestingState });
+  }
+
+  function continueCloseCallTestingLevel() {
+    if (!testingState?.pendingRetry) return;
+    const pending = testingState.pendingRetry;
+    const nextTestingState = {
+      ...testingState,
+      pendingRetry: null,
+      lastScore: pending.score,
+    };
+    setTestingState(nextTestingState);
+    resolveTestingHoldScore(pending.score, pending.phase, testingState.runType || "mixed", pending.level, nextTestingState);
+  }
+
   function handleTestingRoundComplete(finalResults) {
     const finalScore = finalResults.filter((r) => r.correct).length;
     const phase = testingState?.phase || "addsub";
+    const runType = testingState?.runType || "mixed";
     const currentTestingLevel = testingState?.currentLevel || level;
 
     if (finalScore >= TESTING_PASS_SCORE) {
@@ -1949,62 +4238,70 @@ export default function NSWProgressionsMathGame() {
           ...testingState,
           currentLevel: higherLevel,
           lastScore: finalScore,
+          pendingRetry: null,
         };
         setTestingState(nextTestingState);
         startLevel(higherLevel, { selectedMode: "testing", testing: nextTestingState });
         return;
       }
 
-      if (phase === "addsub") {
+      if (phase === "addsub" && runType === "mixed") {
         updateStoredLevels({ addsubLevel: currentTestingLevel });
         updateTestingScores({ addsubScore: finalScore });
         const history = readUserHistory();
+        const muldivStart = testingState?.manualStart?.muldivLevel || history.muldivLevel || "MuS3";
         const nextTestingState = {
           ...testingState,
           phase: "muldiv",
           adsResolvedLevel: currentTestingLevel,
-          currentLevel: history.muldivLevel || "MuS3",
-          startLevel: history.muldivLevel || "MuS3",
+          currentLevel: muldivStart,
+          startLevel: muldivStart,
           lastScore: finalScore,
+          pendingRetry: null,
         };
         setTestingState(nextTestingState);
         startLevel(nextTestingState.currentLevel, { selectedMode: "testing", testing: nextTestingState });
         return;
       }
 
-      updateStoredLevels({ muldivLevel: currentTestingLevel });
-      updateTestingScores({ muldivScore: finalScore });
-      writeTestingUnlock(true);
-      setHasCompletedTesting(true);
-      setTestingState((prev) => ({ ...prev, musResolvedLevel: currentTestingLevel, lastScore: finalScore }));
-      setScreen("testingComplete");
+      if (phase === "muldiv" && runType === "mixed") {
+        updateStoredLevels({ muldivLevel: currentTestingLevel });
+        updateTestingScores({ muldivScore: finalScore });
+        writeTestingUnlock(true);
+        setHasCompletedTesting(true);
+        setTestingState((prev) => ({ ...prev, musResolvedLevel: currentTestingLevel, lastScore: finalScore, pendingRetry: null }));
+        setScreen("testingComplete");
+        return;
+      }
+
+      completeSingleTestingPhase(phase, currentTestingLevel, finalScore);
+      return;
+    }
+
+    if (finalScore === 12 || finalScore === 13) {
+      const retryKey = `${phase}:${currentTestingLevel}`;
+      const retryUsed = Boolean(testingState?.retryUsedLevels?.[retryKey]);
+
+      if (!retryUsed) {
+        setTestingState((prev) => ({
+          ...(prev || {}),
+          lastScore: finalScore,
+          pendingRetry: {
+            phase,
+            level: currentTestingLevel,
+            score: finalScore,
+          },
+        }));
+        setScreen("testingRetryPrompt");
+        return;
+      }
+
+      resolveTestingHoldScore(finalScore, phase, runType, currentTestingLevel);
       return;
     }
 
     if (finalScore >= TESTING_HOLD_MIN && finalScore <= TESTING_HOLD_MAX) {
-      if (phase === "addsub") {
-        updateStoredLevels({ addsubLevel: currentTestingLevel });
-        updateTestingScores({ addsubScore: finalScore });
-        const history = readUserHistory();
-        const nextTestingState = {
-          ...testingState,
-          phase: "muldiv",
-          adsResolvedLevel: currentTestingLevel,
-          currentLevel: history.muldivLevel || "MuS3",
-          startLevel: history.muldivLevel || "MuS3",
-          lastScore: finalScore,
-        };
-        setTestingState(nextTestingState);
-        startLevel(nextTestingState.currentLevel, { selectedMode: "testing", testing: nextTestingState });
-        return;
-      }
-
-      updateStoredLevels({ muldivLevel: currentTestingLevel });
-      updateTestingScores({ muldivScore: finalScore });
-      writeTestingUnlock(true);
-      setHasCompletedTesting(true);
-      setTestingState((prev) => ({ ...prev, musResolvedLevel: currentTestingLevel, lastScore: finalScore }));
-      setScreen("testingComplete");
+      resolveTestingHoldScore(finalScore, phase, runType, currentTestingLevel);
       return;
     }
 
@@ -2014,15 +4311,16 @@ export default function NSWProgressionsMathGame() {
         ...testingState,
         currentLevel: lowerLevel,
         lastScore: finalScore,
+        pendingRetry: null,
       };
       setTestingState(nextTestingState);
       startLevel(lowerLevel, { selectedMode: "testing", testing: nextTestingState });
       return;
     }
 
-    if (phase === "addsub") {
+    if (phase === "addsub" && runType === "mixed") {
       updateStoredLevels({ addsubLevel: currentTestingLevel });
-    updateTestingScores({ addsubScore: finalScore });
+      updateTestingScores({ addsubScore: finalScore });
       const history = readUserHistory();
       const nextTestingState = {
         ...testingState,
@@ -2031,31 +4329,31 @@ export default function NSWProgressionsMathGame() {
         currentLevel: history.muldivLevel || "MuS3",
         startLevel: history.muldivLevel || "MuS3",
         lastScore: finalScore,
+        pendingRetry: null,
       };
       setTestingState(nextTestingState);
       startLevel(nextTestingState.currentLevel, { selectedMode: "testing", testing: nextTestingState });
       return;
     }
 
-    updateStoredLevels({ muldivLevel: currentTestingLevel });
+    if (phase === "muldiv" && runType === "mixed") {
+      updateStoredLevels({ muldivLevel: currentTestingLevel });
       updateTestingScores({ muldivScore: finalScore });
       writeTestingUnlock(true);
       setHasCompletedTesting(true);
-      setTestingState((prev) => ({ ...prev, musResolvedLevel: currentTestingLevel, lastScore: finalScore }));
+      setTestingState((prev) => ({ ...prev, musResolvedLevel: currentTestingLevel, lastScore: finalScore, pendingRetry: null }));
       setScreen("testingComplete");
-  }
-
-  function handleSubmit(e) {
-    e.preventDefault();
-    if (!currentQuestion || feedback) return;
-
-    if (screen === "multiplayerGame") {
-      handleMultiplayerSubmit();
       return;
     }
 
-    const cleaned = answer.trim();
-    const isCorrect = answersMatch(cleaned, currentQuestion.answer);
+    completeSingleTestingPhase(phase, currentTestingLevel, finalScore);
+  }
+
+  function applySoloRoundAnswer(cleanedAnswer, forcedCorrect = null) {
+    if (!currentQuestion || feedback) return;
+
+    const cleaned = String(cleanedAnswer || "").trim();
+    const isCorrect = forcedCorrect === null ? answersMatch(cleaned, currentQuestion.answer) : forcedCorrect;
 
     const entry = {
       prompt: currentQuestion.prompt,
@@ -2074,7 +4372,8 @@ export default function NSWProgressionsMathGame() {
       setAnswer("");
 
       const nextIndex = currentIndex + 1;
-      if (nextIndex >= QUESTIONS_PER_ROUND) {
+      const roundQuestionLimit = isTimeTrialMode ? questions.length : roundQuestionCount;
+      if (nextIndex >= roundQuestionLimit) {
         finishRound(newResults);
       } else {
         setCurrentIndex(nextIndex);
@@ -2082,9 +4381,20 @@ export default function NSWProgressionsMathGame() {
     }, 450);
   }
 
-  function handleMultiplayerSubmit() {
-    const cleaned = answer.trim();
-    const isCorrect = answersMatch(cleaned, currentQuestion.answer);
+  function applyMultiplayerRoundAnswer(cleanedAnswer, forcedCorrect = null) {
+    if (!currentQuestion || feedback) return;
+
+    const cleaned = String(cleanedAnswer || "").trim();
+    const isCorrect = forcedCorrect === null ? answersMatch(cleaned, currentQuestion.answer) : forcedCorrect;
+    const entry = {
+      prompt: currentQuestion.prompt,
+      expected: currentQuestion.answer,
+      given: cleaned,
+      correct: isCorrect,
+      strategy: tipFromQuestion(currentQuestion),
+    };
+    const newResults = [...results, entry];
+    setResults(newResults);
     setFeedback(isCorrect ? "correct" : "incorrect");
 
     setTimeout(() => {
@@ -2093,30 +4403,78 @@ export default function NSWProgressionsMathGame() {
       setMultiplayerState((current) => {
         if (!current || current.finished) return current;
         const nextPlayerScore = isCorrect ? current.playerScore + 1 : current.playerScore;
-        const liveCoins = 0;
+        let nextState = {
+          ...current,
+          playerScore: nextPlayerScore,
+          playerCoinsEarned: current.playerCoinsEarned || 0,
+        };
+
         if (nextPlayerScore >= MULTIPLAYER_TARGET_SCORE) {
-          const higherBots = current.opponents.filter((opponent) => opponent.progress > nextPlayerScore).length;
-          const placementNumber = higherBots + 1;
-          const placement = placementNumber === 1 ? "win" : placementNumber === 2 ? "second" : placementNumber === 3 ? "third" : "finish";
+          const finishOrdinal = current.playerFinishOrdinal || current.nextFinishOrdinal || 1;
+          const placementNumber = finishOrdinal;
+          const placement = placementNumber === 1 ? "win" : placementNumber === 2 ? "second" : placementNumber === 3 ? "third" : "fourth";
           const placementBonus = MULTIPLAYER_PLACEMENT_COINS[placementNumber] || 5;
           const totalCoins = placementBonus;
+          recordStatsEntry({
+            mode: `race-${current.selectedMode}`,
+            durationSeconds: Math.max(1, current.elapsedTime),
+            correctAnswers: nextPlayerScore,
+            raceTimeSeconds: Math.max(1, current.elapsedTime),
+            coinsEarned: totalCoins,
+            raceWon: placementNumber === 1,
+            bestStreak: getLongestCorrectStreak(newResults),
+          });
+          setHistoryRefreshKey((value) => value + 1);
           const storedProfile = readProfileState();
           saveProfileState({ ...storedProfile, coins: (storedProfile.coins || 0) + totalCoins });
-          return {
+
+          const raceKey = getMultiplayerRaceKey(current.selectedMode, current.raceLevel);
+          const bests = readMultiplayerBests();
+          const finishTime = Math.max(1, current.elapsedTime);
+          if (!bests[raceKey] || finishTime < bests[raceKey]) {
+            bests[raceKey] = finishTime;
+            writeMultiplayerBests(bests);
+          }
+
+          nextState = {
             ...current,
-            playerScore: nextPlayerScore,
+            playerScore: MULTIPLAYER_TARGET_SCORE,
             finished: true,
-            winner: playerName?.trim() || "You",
+            winner: placementNumber === 1 ? (playerName?.trim() || "You") : current.opponents.find((opponent) => opponent.finishOrdinal === 1)?.name || "Opponent",
             placement,
             placementNumber,
             placementBonus,
             playerCoinsEarned: totalCoins,
+            playerFinishOrdinal: finishOrdinal,
+            nextFinishOrdinal: Math.max(current.nextFinishOrdinal || 1, finishOrdinal + 1),
           };
         }
-        return { ...current, playerScore: nextPlayerScore, playerCoinsEarned: liveCoins };
+
+        return nextState;
       });
       setCurrentIndex((index) => Math.min(index + 1, questions.length - 1));
     }, 300);
+  }
+
+  function handleSubmit(e) {
+    e.preventDefault();
+    if (screen === "multiplayerGame") {
+      applyMultiplayerRoundAnswer(answer);
+      return;
+    }
+    if (screen === "kingGame") {
+      applyKingAnswer(answer);
+      return;
+    }
+    if (screen === "tugGame") {
+      applyTugAnswer(answer);
+      return;
+    }
+    if (screen === "freeFallGame") {
+      applyFreeFallAnswer(answer);
+      return;
+    }
+    applySoloRoundAnswer(answer);
   }
 
   function restartSameLevel() {
@@ -2133,7 +4491,7 @@ export default function NSWProgressionsMathGame() {
   }
 
   function requestTestingExit() {
-    setPendingTestingExitConfirm(true);
+    exitToHome();
   }
 
   function cancelTestingExit() {
@@ -2141,13 +4499,39 @@ export default function NSWProgressionsMathGame() {
   }
 
   async function copyResultsToClipboard() {
-    const addScoreText = testingScores.addsubScore !== null ? `${testingScores.addsubScore}/15` : "__/15";
-    const mulScoreText = testingScores.muldivScore !== null ? `${testingScores.muldivScore}/15` : "__/15";
-    const resultsText = `${userHistory.addsubLevel}   ${addScoreText}, ${userHistory.muldivLevel}   ${mulScoreText}`;
+    const addLevelText = testingScores.addsubScore !== null ? userHistory.addsubLevel : "AdS__";
+    const addScoreText = testingScores.addsubScore !== null ? String(testingScores.addsubScore) : "";
+    const mulLevelText = testingScores.muldivScore !== null ? userHistory.muldivLevel : "MuS__";
+    const mulScoreText = testingScores.muldivScore !== null ? String(testingScores.muldivScore) : "";
+
+    const plainText = [addLevelText, addScoreText, mulLevelText, mulScoreText].join("	");
+    const htmlTable = `
+      <table>
+        <tr>
+          <td>${addLevelText}</td>
+          <td>${addScoreText}</td>
+          <td>${mulLevelText}</td>
+          <td>${mulScoreText}</td>
+        </tr>
+      </table>
+    `;
+
+    try {
+      if (typeof navigator !== "undefined" && navigator.clipboard?.write && typeof ClipboardItem !== "undefined") {
+        const item = new ClipboardItem({
+          "text/plain": new Blob([plainText], { type: "text/plain" }),
+          "text/html": new Blob([htmlTable], { type: "text/html" }),
+        });
+        await navigator.clipboard.write([item]);
+        setCopyStatus("Copied");
+        window.setTimeout(() => setCopyStatus(""), 1800);
+        return;
+      }
+    } catch {}
 
     try {
       if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(resultsText);
+        await navigator.clipboard.writeText(plainText);
         setCopyStatus("Copied");
         window.setTimeout(() => setCopyStatus(""), 1800);
         return;
@@ -2157,7 +4541,7 @@ export default function NSWProgressionsMathGame() {
     try {
       if (typeof document !== "undefined") {
         const textArea = document.createElement("textarea");
-        textArea.value = resultsText;
+        textArea.value = plainText;
         textArea.readOnly = true;
         textArea.style.position = "fixed";
         textArea.style.left = "-9999px";
@@ -2184,14 +4568,14 @@ export default function NSWProgressionsMathGame() {
 
     try {
       if (typeof window !== "undefined") {
-        window.prompt("Copy these results:", resultsText);
+        window.prompt("Copy these results:", plainText);
         setCopyStatus("Use Ctrl+C");
         window.setTimeout(() => setCopyStatus(""), 2200);
         return;
       }
     } catch {}
 
-    setCopyStatus(resultsText);
+    setCopyStatus(plainText);
     window.setTimeout(() => setCopyStatus(""), 3000);
   }
 
@@ -2204,8 +4588,11 @@ export default function NSWProgressionsMathGame() {
 
   function generateSavePassword() {
     const nextCode = buildProgressPassword();
+    setIsEditingPlayerName(false);
     setGeneratedSaveCode(nextCode);
     setSaveCodeInput(nextCode);
+    setPasswordPanelMode("generate");
+    setShowPasswordEntry(true);
     setSaveCodeStatus("Save password ready");
     window.setTimeout(() => setSaveCodeStatus(""), 2200);
   }
@@ -2255,6 +4642,16 @@ export default function NSWProgressionsMathGame() {
   }
 
   function loadSavePassword() {
+    const enteredPassword = String(saveCodeInput || "").trim();
+    if (enteredPassword.toLowerCase() === "hawkins") {
+      const nextCheatState = !cheatModeActive;
+      setCheatModeActive(nextCheatState);
+      setSaveCodeInput("");
+      setSaveCodeStatus(nextCheatState ? "Cheat mode enabled" : "Cheat mode disabled");
+      window.setTimeout(() => setSaveCodeStatus(""), 2400);
+      return;
+    }
+
     try {
       const { addWord, mulWord, numberPart } = extractSaveWords(saveCodeInput);
       const addData = decodeLevelScoreWord(addWord, progressionOrder.addsub, ADDSUB_SAVE_WORDS);
@@ -2304,21 +4701,14 @@ export default function NSWProgressionsMathGame() {
     setShopOpen(false);
     setPurchasedItemsOpen(false);
     setRoundReward(null);
-    setTestingCoinsEarned(0);
-    setMultiplayerState(null);
-    setScreen("home");
-    setMode(null);
-    setLevel(null);
-    setMixedSelection({ addsubLevel: null, muldivLevel: null });
-    setTestingState(null);
-    setQuestions([]);
-    setCurrentIndex(0);
-    setResults([]);
-    setAnswer("");
-    setFeedback(null);
-    setRoundFinished(false);
-    setTimeLeft(ROUND_TIME);
-    setPendingTestingExitConfirm(false);
+    setGeneratedSaveCode("");
+    setSaveCodeInput("");
+    setSaveCodeStatus("");
+    setShowPasswordEntry(false);
+    setPasswordPanelMode(null);
+    setIsEditingPlayerName(false);
+    setShowInfo(false);
+    exitToHome();
   }
 
   const incorrectItems = results.filter((r) => !r.correct);
@@ -2328,56 +4718,287 @@ export default function NSWProgressionsMathGame() {
   const equippedRingItem = PROFILE_SHOP_ITEMS.find((item) => profileState.equippedItems?.includes(item.id) && item.category === "ring");
   const premiumRingOverlay = getPremiumRingOverlayClass(equippedRingItem?.id);
   const currentTheme = SITE_THEMES[themeId] || SITE_THEMES.blue;
-  const activeCoinBoost = (profileState.activeBoosts || []).filter((boost) => boost.type === "coinMultiplier2x" && boost.expiresAt > boostCountdownNow).sort((a, b) => a.expiresAt - b.expiresAt)[0] || null;
-  const passed = score >= PASS_SCORE;
+  const isSportsTheme = ["broncos", "raiders", "bulldogs", "sharks", "dolphins", "titans", "seaeagles", "melbstorm", "knights", "warriors", "cowboys", "eels", "panthers", "rabbitohs", "dragons", "roosters", "tigers", "matildas", "swans", "giants"].includes(themeId);
+  const sportsMascotLabel = SPORT_THEME_MASCOT_NAMES[themeId] || "School";
+  const brandSuffix = isSportsTheme ? sportsMascotLabel : "School";
+  const actionButtonClass = isSportsTheme ? "bg-slate-950 hover:bg-slate-900 border border-white/20 text-white" : currentTheme.primaryButton;
+  const accentPillClass = isSportsTheme ? "bg-slate-950/95 text-white border border-white/20" : currentTheme.accentBadge;
+  const headerSurfaceClass = isSportsTheme ? "border-white/20 bg-slate-950/95" : "border-white/15 bg-white/10";
+  const placementBoxClass = isSportsTheme ? "inline-flex items-center gap-2 rounded-2xl bg-slate-950/95 border border-white/20 px-3 py-2 min-w-0" : "inline-flex items-center gap-2 rounded-2xl bg-slate-800/95 border border-white/15 px-3 py-2 min-w-0";
+  const topControlButtonClass = isSportsTheme ? "h-11 min-w-[140px] rounded-2xl border-white/20 bg-slate-950 text-white hover:bg-slate-900 shadow-[0_8px_24px_rgba(15,23,42,0.35)]" : "h-11 min-w-[140px] rounded-2xl border-white/30 bg-white/20 px-4 text-white hover:bg-white/30 shadow-[0_8px_24px_rgba(255,255,255,0.08)]";
+  const homeTileBaseClass = isSportsTheme ? "bg-slate-950/95 border-white/20 hover:bg-slate-900" : "bg-white/5 border-white/10 hover:bg-white/10";
+  const homeTileActiveClass = isSportsTheme ? "bg-slate-950 border-white/30 shadow-[0_0_0_1px_rgba(255,255,255,0.16)]" : "bg-white/15 border-cyan-300/40 shadow-[0_0_0_1px_rgba(125,211,252,0.18)]";
+  const homeShellClass = isSportsTheme ? "bg-slate-950/96 border-white/20" : "bg-white/10 border-white/10";
+  const sportsThemeVisibilityClass = isSportsTheme
+    ? "[&_.bg-white\/10]:bg-slate-950/96 [&_.bg-white\/12]:bg-slate-950/96 [&_.bg-white\/15]:bg-slate-950/96 [&_.bg-white\/20]:bg-slate-950/97 [&_.bg-white\/5]:bg-slate-950/94 [&_.bg-slate-900\/50]:bg-slate-950/94 [&_.bg-slate-900\/60]:bg-slate-950/96 [&_.bg-slate-900\/65]:bg-slate-950/96 [&_.bg-slate-900\/70]:bg-slate-950/97 [&_.bg-slate-900\/75]:bg-slate-950/97 [&_.bg-slate-900\/80]:bg-slate-950/97 [&_.bg-slate-800\/95]:bg-slate-950/97 [&_.bg-slate-950\/60]:bg-slate-950/96 [&_.bg-slate-950\/70]:bg-slate-950/97 [&_.bg-slate-950\/90]:bg-slate-950/98 [&_.bg-cyan-500\/15]:bg-slate-950/97 [&_.bg-emerald-500\/15]:bg-slate-950/97 [&_.bg-amber-500\/15]:bg-slate-950/97 [&_.border-white\/10]:border-white/20 [&_.border-white\/15]:border-white/24 [&_.border-white\/20]:border-white/28 [&_.border-white\/30]:border-white/36"
+    : "";
+  const isBilleaMode = themeId === "billea";
+  const minimalCopyMode = isBilleaMode;
+  const billeaTileClass = isBilleaMode ? "bg-black border-white/80 hover:bg-zinc-900 text-white" : "";
+  const billeaTileActiveClass = isBilleaMode ? "bg-black border-white shadow-[0_0_0_2px_rgba(255,255,255,0.8)] text-white" : "";
+  const billeaActionButtonClass = isBilleaMode ? "bg-black hover:bg-zinc-900 text-white border-2 border-white disabled:bg-zinc-900 disabled:text-white/40" : "";
+  const billeaTestingScreen = isBilleaMode && isTestingMode;
+  const activeCoinBoost = (profileState.activeBoosts || []).filter((boost) => getBoostMultiplierFromType(boost.type) > 1 && boost.expiresAt > boostCountdownNow).sort((a, b) => a.expiresAt - b.expiresAt)[0] || null;
+  const statsLog = useMemo(() => readStatsLog(), [historyRefreshKey]);
+  const storedTimeTrialHistory = useMemo(() => readTimeTrialHistory(), [historyRefreshKey]);
+  const storedFreeFallHistory = useMemo(() => readFreeFallHistory(), [historyRefreshKey]);
+  const achievementMetrics = useMemo(() => getAchievementMetrics(statsLog, storedTimeTrialHistory), [statsLog, storedTimeTrialHistory]);
+  const achievementItems = useMemo(() => PROFILE_SHOP_ITEMS.filter((item) => item.achievementOnly), []);
+  const timeTrialLeaderboards = useMemo(() => {
+    if (!timeTrialState) return { overall: [], byLevel: [] };
+    return getTimeTrialLeaderboardEntries(storedTimeTrialHistory, timeTrialState.selectedMode, timeTrialState.levelLabel);
+  }, [timeTrialState, storedTimeTrialHistory]);
+  const freeFallHighScoreSeconds = useMemo(() => {
+    return (storedFreeFallHistory || []).reduce((best, entry) => Math.max(best, Number(entry?.timeSurvivedSeconds || 0)), 0);
+  }, [storedFreeFallHistory]);
+  const freeFallDifficultyLevel = freeFallState ? 1 + Math.floor((freeFallState.correctAnswers || 0) / 20) : 1;
+  const freeFallMaxOnScreen = 1 + freeFallDifficultyLevel;
+  const freeFallVisualSpeedMultiplier = 1 + Math.max(0, freeFallDifficultyLevel - 1) * 0.06;
+  const freeFallModeHighScoreSeconds = useMemo(() => {
+    return (storedFreeFallHistory || [])
+      .filter((entry) => entry?.selectedMode === freeFallState?.selectedMode)
+      .reduce((best, entry) => Math.max(best, Number(entry?.timeSurvivedSeconds || 0)), 0);
+  }, [storedFreeFallHistory, freeFallState?.selectedMode]);
+  const goalProgressPercent = (currentPassScore / Math.max(1, roundQuestionCount)) * 100;
+  const GOAL_PROGRESS_PERCENT = goalProgressPercent;
+  const kingLowTimeThreshold = kingState ? Math.max(1, Math.ceil(kingState.timePerQuestion * 0.15)) : 0;
+  const kingIsUrgent = screen === "kingGame" && Boolean(kingState) && timeLeft <= kingLowTimeThreshold && !feedback;
+  const kingIntroSecondsLeft = screen === "kingIntro" && kingIntroDeadline ? Math.max(0, Math.ceil((kingIntroDeadline - boostCountdownNow) / 1000)) : 0;
+  const kingIntroProgress = screen === "kingIntro" && kingIntroDeadline ? Math.max(0, Math.min(100, ((kingIntroDeadline - boostCountdownNow) / 4000) * 100)) : 0;
+  const tugIntroSecondsLeft = screen === "tugIntro" && tugIntroDeadline ? Math.max(0, Math.ceil((tugIntroDeadline - boostCountdownNow) / 1000)) : 0;
+  const tugIntroProgress = screen === "tugIntro" && tugIntroDeadline ? Math.max(0, Math.min(100, ((tugIntroDeadline - boostCountdownNow) / TUG_OF_WAR_INTRO_MS) * 100)) : 0;
+  const tugNextPullMs = screen === "tugGame" && tugState ? Math.max(0, Number(tugState.nextAIPullAt || 0) - boostCountdownNow) : 0;
+  const tugNextPullSeconds = tugNextPullMs > 0 ? (tugNextPullMs / 1000).toFixed(1) : "0.0";
+  const tugNextPullProgress = screen === "tugGame" && tugState ? Math.max(0, Math.min(100, (tugNextPullMs / Math.max(1, Number(tugState.aiPullEveryMs || 1))) * 100)) : 0;
+  const passed = score >= currentPassScore;
+  const hasAddSubPlacement = testingScores.addsubScore !== null;
+  const hasMulDivPlacement = testingScores.muldivScore !== null;
+  const hasAnyPlacement = hasAddSubPlacement || hasMulDivPlacement;
+  const hasMixedPlacement = hasAddSubPlacement && hasMulDivPlacement;
+  const sportThemeIds = useMemo(() => Object.keys(SPORT_THEME_MASCOT_NAMES), []);
+  const sportBackgroundIds = useMemo(() => new Set([
+    "bg-broncos", "bg-raiders", "bg-bulldogs", "bg-sharks", "bg-dolphins", "bg-titans",
+    "bg-stormclub", "bg-knights", "bg-warriors", "bg-cowboys", "bg-eels", "bg-panthers",
+    "bg-rabbitohs", "bg-dragons-v", "bg-manly-v", "bg-roosters", "bg-tigersclub",
+    "bg-matildas", "bg-swans", "bg-giants"
+  ]), []);
+  const sportRingIds = useMemo(() => new Set([
+    "ring-seaeagle", "ring-raider", "ring-bronco", "ring-sharkfin", "ring-stormpulse",
+    "ring-footyfire", "ring-matildaspark", "ring-swanwing", "ring-giantglow"
+  ]), []);
+  const historyStats = useMemo(() => {
+    return {
+      all: summariseStats(statsLog, null),
+      week: summariseStats(statsLog, 7),
+    };
+  }, [statsLog]);
+
+  useEffect(() => {
+    const unlockedAchievementIds = PROFILE_SHOP_ITEMS
+      .filter((item) => item.achievementOnly && isAchievementUnlocked(item, achievementMetrics))
+      .map((item) => item.id);
+    const missingAchievementIds = unlockedAchievementIds.filter((id) => !(profileState.ownedItems || []).includes(id));
+    if (missingAchievementIds.length === 0) return;
+    saveProfileState({
+      ...profileState,
+      ownedItems: [...new Set([...(profileState.ownedItems || []), ...missingAchievementIds])],
+    });
+  }, [achievementMetrics, profileState]);
+  const practiceLocked = !hasAnyPlacement;
+  const gamesLocked = !hasAnyPlacement;
   const effectiveModeForProgression = mode === "testing" ? testingState?.phase : mode;
   const next = effectiveModeForProgression && level ? getNextLevel(effectiveModeForProgression, level) : null;
 
   return (
-    <div className={`min-h-screen ${currentTheme.page} text-white p-6`}>
+    <div className={`min-h-screen ${currentTheme.page} text-white p-6 ${sportsThemeVisibilityClass} ${isBilleaMode ? "[&_input]:bg-black [&_input]:text-white [&_input]:border-2 [&_input]:border-white [&_.text-blue-100\/80]:text-white [&_.text-blue-100\/70]:text-white/90 [&_.text-blue-100\/75]:text-white/90 [&_.text-white\/75]:text-white/90 [&_.bg-white\/10]:bg-black [&_.bg-white\/5]:bg-black [&_.bg-slate-900\/60]:bg-black [&_.bg-slate-950\/60]:bg-black [&_.bg-slate-950\/70]:bg-black [&_.bg-slate-800\/95]:bg-black [&_.border-white\/10]:border-white/70 [&_.border-white\/15]:border-white/80 [&_.text-xs]:text-sm [&_.text-sm]:text-lg [&_.text-lg]:text-2xl [&_.text-xl]:text-3xl [&_p]:text-lg [&_h3]:text-3xl [&_h4]:text-2xl" : ""}`}>
       <div className="max-w-6xl mx-auto">
-        <div className="flex items-center justify-between gap-4 mb-6">
-          <div>
-            <h1 className="text-3xl md:text-5xl font-black tracking-tight">
-              Progressions
-              <span className="ml-2 inline-flex items-center gap-0.5">
-                <button type="button" onClick={() => handleCheatLetterClick("P")} className="inline text-inherit hover:text-white focus:outline-none">P</button>
-                <button type="button" onClick={() => handleCheatLetterClick("O")} className="inline text-inherit hover:text-white focus:outline-none">o</button>
-                <button type="button" onClick={() => handleCheatLetterClick("W")} className="inline text-inherit hover:text-white focus:outline-none">w</button>
-                <span>er-Up</span>
-              </span>
+        <div className="mb-3 space-y-3">
+          <button type="button" onClick={backToHome} className="text-left group">
+            <h1 className="text-3xl md:text-4xl tracking-tight group-hover:opacity-90 transition-opacity">
+              <span className="font-black">MFaB.</span><span className="font-normal">{brandSuffix}</span>
             </h1>
-            <p className="text-white/85 mt-2 text-sm md:text-base">
-              A fast-paced NSW progressions mental maths challenge.
-            </p>
-            {cheatModeActive && (
-              <div className="mt-3 flex flex-wrap gap-2">
-                <Button type="button" onClick={clearAllData} variant="outline" className="rounded-2xl border-red-300/30 bg-red-400/10 text-red-100 hover:bg-red-400/20">
-                  Clear all data
-                </Button>
-              </div>
-            )}
-          </div>
-          <div className="hidden md:flex items-center gap-2 bg-white/10 rounded-2xl px-4 py-3 backdrop-blur-sm">
-            <Calculator className="w-5 h-5" />
-            <span className="text-sm">15 questions • 2 minutes • Level up at 14/15</span>
-          </div>
-        </div>
+          </button>
 
-        {(cheatModeActive || activeCoinBoost) && (
-          <div className="mb-4 flex flex-wrap gap-3">
-            {cheatModeActive && (
-              <div className="inline-flex items-center rounded-2xl border border-amber-300/30 bg-amber-400/15 px-4 py-2 text-sm font-semibold text-amber-100">
-                Unlimited coins active
+          <div className="flex flex-wrap xl:flex-nowrap items-center justify-between gap-3">
+            <div className="flex items-center gap-3 flex-wrap xl:flex-nowrap min-w-0">
+              <div className={cn("inline-flex items-center gap-3 rounded-2xl border px-3 py-2.5 backdrop-blur-sm h-11 shrink-0", headerSurfaceClass)}>
+                <div className="relative shrink-0 w-[52px] h-[52px]">
+                  {premiumRingOverlay && (
+                    <div className={`absolute -inset-1.5 rounded-full opacity-95 ${premiumRingOverlay} blur-[1px]`} />
+                  )}
+                  {equippedRingItem?.style && <div className={`absolute inset-0 rounded-full pointer-events-none ${equippedRingItem.style}`} />}
+                  <div className="absolute inset-[5px] rounded-full flex items-center justify-center border border-white/15 overflow-hidden isolate">
+                    <div className={getCircularBackgroundClass(equippedBackgroundItem?.style)} />
+                    {equippedEmojiItem ? (
+                      <div className={getEmojiVisualClass(equippedEmojiItem.emoji, "text-3xl drop-shadow-[0_2px_8px_rgba(255,255,255,0.18)]")}>{equippedEmojiItem.emoji}</div>
+                    ) : (
+                      <UserCircle2 className="w-7 h-7 text-blue-100/85" />
+                    )}
+                  </div>
+                </div>
+
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className="text-sm md:text-base font-black text-white truncate max-w-[120px] md:max-w-[170px]">{playerName?.trim() ? playerName : "Player"}</div>
+                    {!isEditingPlayerName && (
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        onClick={beginEditingPlayerName}
+                        className="w-7 h-7 rounded-full bg-white/10 hover:bg-white/15 text-blue-50 shrink-0"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </Button>
+                    )}
+                  </div>
+                  {!minimalCopyMode && <div className="text-[11px] text-white/70">Profile active</div>}
+                </div>
               </div>
-            )}
-            {activeCoinBoost && (
-              <div className="inline-flex items-center rounded-2xl border border-emerald-300/30 bg-emerald-400/15 px-4 py-2 text-sm font-semibold text-emerald-100">
-                Double coins boost: {formatDuration(activeCoinBoost.expiresAt - boostCountdownNow)} left
+
+              <div className={cn("inline-flex items-center gap-1.5 rounded-2xl border px-3 py-2 text-xs font-bold backdrop-blur-sm h-11 whitespace-nowrap shrink-0", isSportsTheme ? "border-white/20 bg-slate-950/95 text-white" : "border-amber-200/20 bg-amber-400/15 text-amber-100")}>
+                <CircleDollarSign className="w-3.5 h-3.5" />
+                {cheatModeActive ? "∞ coins" : `${profileState.coins} coins`}
               </div>
-            )}
+
+              <div className={cn("inline-flex items-center gap-1.5 rounded-2xl border px-3 py-2 text-xs font-semibold backdrop-blur-sm h-11 whitespace-nowrap shrink-0 min-w-[170px] justify-center", isSportsTheme ? "border-white/20 bg-slate-950/95 text-white" : "border-emerald-300/30 bg-emerald-400/15 text-emerald-100")}>
+                {activeCoinBoost ? (
+                  <>
+                    <CircleDollarSign className="w-3.5 h-3.5" />
+                    <span>{formatDuration(activeCoinBoost.expiresAt - boostCountdownNow)} left</span>
+                  </>
+                ) : (
+                  <span className="text-emerald-100/60">No boost active</span>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 flex-wrap xl:flex-nowrap shrink-0">
+              <Button
+                type="button"
+                onClick={() => {
+                  setIsEditingPlayerName(false);
+                  setShowInfo((open) => !open);
+                }}
+                variant="outline"
+                className={topControlButtonClass}
+              >
+                {showInfo ? "Hide Level Info" : "Level Info"}
+              </Button>
+              <Button
+                type="button"
+                onClick={() => {
+                  if (showPasswordEntry && passwordPanelMode === "generate") {
+                    setShowPasswordEntry(false);
+                    setPasswordPanelMode(null);
+                    return;
+                  }
+                  generateSavePassword();
+                }}
+                variant="outline"
+                className={topControlButtonClass}
+              >
+                {showPasswordEntry && passwordPanelMode === "generate"
+                  ? (minimalCopyMode ? "Hide Code" : "Hide Password")
+                  : (minimalCopyMode ? "Save Code" : "Generate Password")}
+              </Button>
+              <Button
+                type="button"
+                onClick={() => {
+                  const openingLoad = !(showPasswordEntry && passwordPanelMode === "load");
+                  setIsEditingPlayerName(false);
+                  setPasswordPanelMode("load");
+                  setShowPasswordEntry(openingLoad);
+                  if (openingLoad) setSaveCodeInput("");
+                }}
+                variant="outline"
+                className={topControlButtonClass}
+              >
+                {showPasswordEntry && passwordPanelMode === "load"
+                  ? (minimalCopyMode ? "Hide Code" : "Hide Password")
+                  : (minimalCopyMode ? "Load Code" : "Enter Password")}
+              </Button>
+            </div>
           </div>
-        )}
+
+          {cheatModeActive && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Button
+                type="button"
+                onClick={clearAllData}
+                variant="outline"
+                className="rounded-2xl border-red-300/30 bg-red-400/10 text-red-100 hover:bg-red-400/20"
+              >
+                Clear all data
+              </Button>
+            </div>
+          )}
+
+          {(isEditingPlayerName || showPasswordEntry) && (
+            <div className="flex items-center justify-end gap-2 w-full">
+              {isEditingPlayerName ? (
+                <>
+                  <Input
+                    ref={playerNameInputRef}
+                    value={draftPlayerName}
+                    onChange={(e) => handlePlayerNameChange(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") savePlayerName();
+                      if (e.key === "Escape") cancelPlayerNameEdit();
+                    }}
+                    placeholder="Enter your name"
+                    maxLength={20}
+                    className="h-11 rounded-2xl bg-white/10 border-white/15 text-white placeholder:text-white/40 min-w-0 flex-1 max-w-[620px]"
+                  />
+                  <Button type="button" onClick={savePlayerName} className={`h-11 rounded-2xl px-4 ${actionButtonClass} text-white font-bold whitespace-nowrap`}>
+                    Save
+                  </Button>
+                  <Button type="button" onClick={cancelPlayerNameEdit} variant="outline" className="h-11 rounded-2xl border-white/20 bg-white/5 px-4 text-white hover:bg-white/10 whitespace-nowrap">
+                    Cancel
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Input
+                    value={saveCodeInput}
+                    onChange={(e) => setSaveCodeInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        if (passwordPanelMode === "generate") {
+                          copySavePasswordToClipboard();
+                        } else {
+                          loadSavePassword();
+                        }
+                      }
+                    }}
+                    readOnly={passwordPanelMode === "generate"}
+                    placeholder={passwordPanelMode === "generate" ? "Generated password" : "Enter password"}
+                    className="h-11 rounded-2xl bg-white/10 border-white/15 text-white placeholder:text-white/40 min-w-0 flex-1 max-w-[620px]"
+                  />
+                  {passwordPanelMode === "generate" ? (
+                    <Button
+                      type="button"
+                      onClick={copySavePasswordToClipboard}
+                      className={`h-11 rounded-2xl px-4 ${actionButtonClass} text-white font-bold whitespace-nowrap`}
+                    >
+                      Copy
+                    </Button>
+                  ) : (
+                    <Button
+                      type="button"
+                      onClick={loadSavePassword}
+                      className={`h-11 rounded-2xl px-4 ${actionButtonClass} text-white font-bold whitespace-nowrap`}
+                    >
+                      Submit
+                    </Button>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+
+          {saveCodeStatus && <div className="text-xs text-cyan-200 font-semibold text-right">{saveCodeStatus}</div>}
+        </div>
 
         <AnimatePresence mode="wait">
           {screen === "home" && (
@@ -2386,242 +5007,54 @@ export default function NSWProgressionsMathGame() {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
-              className="space-y-5"
+              className="space-y-3"
             >
-              <div className="grid gap-5">
-                <Card className="bg-white/10 border-white/10 rounded-3xl shadow-2xl overflow-hidden">
-                  <CardContent className="p-5 md:p-6">
-                    <div className="grid lg:grid-cols-[1.1fr_0.9fr] gap-6 items-center">
-                      <div>
-                        <div className="flex items-start justify-between gap-4 mb-4">
-                          <div>
-                            <div className="text-blue-100/70 text-xs uppercase tracking-[0.25em] mb-2">Profile</div>
-                            <div className="flex items-center gap-2">
-                              <h2 className="text-2xl md:text-3xl font-black text-white drop-shadow-[0_2px_8px_rgba(255,255,255,0.18)]">
-                                {playerName?.trim() ? playerName : "Player"}
-                              </h2>
-                              {!isEditingPlayerName && (
-                                <Button
-                                  type="button"
-                                  size="icon"
-                                  variant="ghost"
-                                  onClick={beginEditingPlayerName}
-                                  className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/15 text-blue-50"
-                                >
-                                  <Pencil className="w-4 h-4" />
-                                </Button>
-                              )}
-                            </div>
-                          </div>
-                          <div className="rounded-full bg-amber-400/20 border border-amber-200/20 px-3 py-1 text-sm font-bold text-amber-100">
-                            {cheatModeActive ? "∞ coins" : `${profileState.coins} coins`}
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-4">
-                          <div className="relative shrink-0">
-                            {premiumRingOverlay && (
-                              <div className={`absolute -inset-2 rounded-full opacity-95 ${premiumRingOverlay} blur-[1px]`} />
-                            )}
-                            <div className={`relative w-32 h-32 md:w-36 md:h-36 rounded-full flex items-center justify-center border border-white/15 shrink-0 overflow-hidden ${equippedBackgroundItem?.style || "bg-slate-900/70"} ${equippedRingItem?.style || ""}`}>
-                              {equippedEmojiItem ? (
-                                <div className="text-6xl md:text-7xl drop-shadow-[0_2px_8px_rgba(255,255,255,0.18)]">{equippedEmojiItem.emoji}</div>
-                              ) : (
-                                <UserCircle2 className="w-20 h-20 md:w-24 md:h-24 text-blue-100/85" />
-                              )}
-                              {premiumRingOverlay && <div className="absolute inset-[6px] rounded-full border border-white/20 pointer-events-none" />}
-                            </div>
-                          </div>
-                          <div className="flex-1 space-y-3">
-                            <div className="text-sm text-white/90">Start with a blank silhouette, then unlock profile upgrades in the shop.</div>
-                            {isEditingPlayerName && (
-                              <div className="space-y-2">
-                                <label className="text-xs uppercase tracking-[0.2em] text-white/80">Player name</label>
-                                <div className="flex items-center gap-2">
-                                  <Input
-                                    ref={playerNameInputRef}
-                                    value={draftPlayerName}
-                                    onChange={(e) => handlePlayerNameChange(e.target.value)}
-                                    onKeyDown={(e) => {
-                                      if (e.key === "Enter") savePlayerName();
-                                      if (e.key === "Escape") cancelPlayerNameEdit();
-                                    }}
-                                    placeholder="Enter your name"
-                                    maxLength={20}
-                                    className="h-11 rounded-2xl bg-white/10 border-white/15 text-white placeholder:text-white/40"
-                                  />
-                                  <Button
-                                    type="button"
-                                    size="icon"
-                                    onClick={savePlayerName}
-                                    className="w-11 h-11 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-white shrink-0"
-                                  >
-                                    <Check className="w-5 h-5" />
-                                  </Button>
-                                </div>
-                              </div>
-                            )}
-                            {profileState.equippedItems.length > 0 && (
-                              <div className="flex flex-wrap gap-2">
-                                {profileState.equippedItems.map((id) => {
-                                  const item = PROFILE_SHOP_ITEMS.find((entry) => entry.id === id);
-                                  return item ? <Badge key={id} className="bg-cyan-400/20 text-cyan-50 border-none">{item.name}</Badge> : null;
-                                })}
-                              </div>
-                            )}
-                            <div className="flex flex-wrap gap-2 text-xs text-white/80">
-                              {activeCoinMultiplier > 1 && <Badge className="bg-emerald-400/15 text-emerald-100 border-none">2x coin boost active</Badge>}
-                            </div>
-                            <div className="flex flex-wrap gap-2">
-                              <Button onClick={() => setShowInfo((open) => !open)} variant="outline" className="rounded-2xl border-white/20 bg-white/5 text-white hover:bg-white/10">
-                                {showInfo ? "Hide Info" : "Info"}
-                              </Button>
-                              <Button onClick={() => setShopOpen((open) => !open)} className={`rounded-2xl ${currentTheme.primaryButton} text-white`}>
-                                <ShoppingBag className="w-4 h-4 mr-2" />
-                                {shopOpen ? "Close Shop" : "Open Shop"}
-                              </Button>
-                              <Button onClick={() => setPurchasedItemsOpen((open) => !open)} variant="outline" className="rounded-2xl border-white/20 bg-white/5 text-white hover:bg-white/10">
-                                {purchasedItemsOpen ? "Hide Purchased" : "Purchased Items"}
-                              </Button>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="rounded-3xl bg-slate-950/75 border border-white/15 shadow-[0_12px_30px_rgba(15,23,42,0.35)] p-5 space-y-4">
-                        <div>
-                          <div className="text-white/75 text-xs uppercase tracking-[0.22em] mb-2">User's current level</div>
-                          <h2 className="text-3xl md:text-4xl font-black text-white drop-shadow-[0_3px_14px_rgba(255,255,255,0.18)]">Saved placement</h2>
-                        </div>
-                        <div className="grid grid-cols-2 gap-3">
-                          <div className="rounded-2xl bg-slate-800/95 border border-white/15 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] px-4 py-4 min-w-0">
-                            <div className="text-[10px] md:text-[11px] text-white/78 mb-2 uppercase tracking-[0.08em] whitespace-nowrap">Addition and Subtraction</div>
-                            <div className="text-3xl md:text-4xl font-black text-white drop-shadow-[0_2px_10px_rgba(255,255,255,0.12)]">{userHistory.addsubLevel}</div>
-                            <div className="text-sm font-semibold text-cyan-100/90 mt-2">{testingScores.addsubScore !== null ? `${testingScores.addsubScore}/15` : "No test yet"}</div>
-                          </div>
-                          <div className="rounded-2xl bg-slate-800/95 border border-white/15 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] px-4 py-4 min-w-0">
-                            <div className="text-[10px] md:text-[11px] text-white/78 mb-2 uppercase tracking-[0.08em] whitespace-nowrap">Multiplication and Division</div>
-                            <div className="text-3xl md:text-4xl font-black text-white drop-shadow-[0_2px_10px_rgba(255,255,255,0.12)]">{userHistory.muldivLevel}</div>
-                            <div className="text-sm font-semibold text-cyan-100/90 mt-2">{testingScores.muldivScore !== null ? `${testingScores.muldivScore}/15` : "No test yet"}</div>
-                          </div>
-                        </div>
-                        <div className="grid gap-3 pt-1">
-                          <div className="space-y-2">
-                            <div className="grid grid-cols-3 gap-2">
-                              <Button type="button" onClick={copyResultsToClipboard} variant="outline" className="rounded-2xl border-white/20 bg-white/5 text-white hover:bg-white/10 px-2 text-xs md:text-sm whitespace-nowrap">
-                                Copy Results
-                              </Button>
-                              <Button type="button" onClick={generateSavePassword} variant="outline" className="rounded-2xl border-white/20 bg-white/5 text-white hover:bg-white/10 px-2 text-xs md:text-sm whitespace-nowrap">
-                                Generate Password
-                              </Button>
-                              <Button type="button" onClick={() => setShowPasswordEntry((open) => !open)} variant="outline" className="rounded-2xl border-white/20 bg-white/5 text-white hover:bg-white/10 px-2 text-xs md:text-sm whitespace-nowrap">
-                                {showPasswordEntry ? "Hide Password" : "Enter Password"}
-                              </Button>
-                            </div>
-                            <div className="text-xs text-white/70">
-                              Copy results to send to your Class Teams. Use the password to transfer progress between computers.
-                            </div>
-                            <div className="flex flex-wrap items-center gap-3">
-                              {copyStatus && <span className="text-sm text-emerald-200 font-semibold">{copyStatus}</span>}
-                              {saveCodeStatus && <span className="text-sm text-cyan-200 font-semibold">{saveCodeStatus}</span>}
-                            </div>
-                          </div>
-
-                          {generatedSaveCode && (
-                            <div className="rounded-2xl bg-slate-900/60 border border-white/10 px-4 py-3 space-y-2">
-                              <div className="flex items-center justify-between gap-3">
-                                <div className="text-[11px] uppercase tracking-[0.18em] text-white/70">Save password</div>
-                                <Button type="button" size="sm" onClick={copySavePasswordToClipboard} variant="outline" className="h-8 rounded-xl border-white/20 bg-white/5 text-white hover:bg-white/10">
-                                  Copy
-                                </Button>
-                              </div>
-                              <div className="text-sm md:text-base font-mono break-all text-white">{generatedSaveCode}</div>
-                              <div className="text-xs text-white/70">Generate this code, then save it somewhere safe to use on a different computer later.</div>
-                            </div>
-                          )}
-
-                          {showPasswordEntry && (
-                            <div className="rounded-2xl bg-slate-900/60 border border-white/10 px-4 py-3 space-y-3">
-                              <div className="text-[11px] uppercase tracking-[0.18em] text-white/70">Load save password</div>
-                              <div className="flex flex-col sm:flex-row gap-2">
-                                <Input
-                                  value={saveCodeInput}
-                                  onChange={(e) => setSaveCodeInput(e.target.value)}
-                                  placeholder="Paste save password"
-                                  className="h-11 rounded-2xl bg-white/10 border-white/15 text-white placeholder:text-white/40"
-                                />
-                                <Button type="button" onClick={loadSavePassword} className={`rounded-2xl ${currentTheme.primaryButton} text-white`}>
-                                  Load
-                                </Button>
-                              </div>
-                              <div className="text-xs text-white/70">Paste a saved password from another computer to transfer progress into this device.</div>
-                            </div>
-                          )}
-                        </div>
-                        
+              <Card className={cn("rounded-3xl shadow-2xl overflow-hidden", homeShellClass)}>
+                <CardContent className="px-4 py-3">
+                  <div className="flex flex-wrap items-center gap-3 justify-between">
+                    <div className="flex flex-wrap items-center gap-2 md:gap-3 min-w-0">
+                      <div className="text-white/70 text-[11px] uppercase tracking-[0.18em] shrink-0">Current placement</div>
+                      <div className={placementBoxClass}>
+                        <div className="text-[10px] md:text-[11px] text-white/78 uppercase tracking-[0.12em] whitespace-nowrap">+ / −</div>
+                        <div className="text-sm md:text-base font-black text-white">{testingScores.addsubScore !== null ? userHistory.addsubLevel : "_____"}</div>
+                        <div className="text-[11px] font-semibold text-cyan-100/90">{testingScores.addsubScore !== null ? `${testingScores.addsubScore}/15` : "No test yet"}</div>
+                      </div>                      <div className={placementBoxClass}>
+                        <div className="text-[10px] md:text-[11px] text-white/78 uppercase tracking-[0.12em] whitespace-nowrap">× / ÷</div>
+                        <div className="text-sm md:text-base font-black text-white">{testingScores.muldivScore !== null ? userHistory.muldivLevel : "_____"}</div>
+                        <div className="text-[11px] font-semibold text-cyan-100/90">{testingScores.muldivScore !== null ? `${testingScores.muldivScore}/15` : "No test yet"}</div>
                       </div>
                     </div>
-                  </CardContent>
-                </Card>
-              </div>
-
-              {purchasedItemsOpen && (
-                <Card className="bg-white/10 border-white/10 rounded-3xl shadow-2xl overflow-hidden">
-                  <CardContent className="p-5 md:p-6 space-y-4">
-                    <div>
-                      <div className="text-blue-100/70 text-xs uppercase tracking-[0.25em] mb-2">Purchased items</div>
-                      <h2 className="text-xl md:text-2xl font-bold">Your collection</h2>
+                    <div className="flex items-end gap-2.5 shrink-0 flex-wrap justify-end">
+                      <div className="flex flex-col items-center gap-1 mr-2">
+                        <div className="h-[10px]" />
+                        <Button type="button" onClick={() => setScreen("history")} variant="outline" className="h-9 rounded-2xl border-white/20 bg-white/5 px-3 text-xs whitespace-nowrap text-white hover:bg-white/10">
+                          History
+                        </Button>
+                      </div>
+                      <div className="flex flex-col items-center gap-1">
+                        <div className="h-[10px]" />
+                        <Button type="button" onClick={copyResultsToClipboard} variant="outline" className="h-9 rounded-2xl border-white/20 bg-white/5 px-3 text-xs whitespace-nowrap text-white hover:bg-white/10">
+                          {minimalCopyMode ? "Copy" : "Copy Results"}
+                        </Button>
+                      </div>
+                      {!minimalCopyMode && (
+                        <div className="flex flex-col items-center gap-1">
+                          <div className="text-[10px] text-white/65 leading-none text-center">Send to your</div>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => window.open("https://teams.microsoft.com/", "_blank", "noopener,noreferrer")}
+                            className="h-9 rounded-2xl border-white/20 bg-white/5 px-3 text-xs whitespace-nowrap text-white hover:bg-white/10"
+                          >
+                            Class Teams
+                          </Button>
+                        </div>
+                      )}
+                      {copyStatus && <span className="text-xs text-emerald-200 font-semibold self-center">{copyStatus}</span>}
                     </div>
-
-                    <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                      {SHOP_CATEGORIES.map((category) => {
-                        const ownedItems = PROFILE_SHOP_ITEMS.filter(
-                          (item) => item.category === category.id && (profileState.ownedItems || []).includes(item.id)
-                        );
-                        const CategoryIcon = category.icon;
-                        return (
-                          <div key={category.id} className="rounded-2xl bg-slate-900/60 border border-white/10 p-4 space-y-3">
-                            <div className="flex items-center gap-2">
-                              <CategoryIcon className="w-4 h-4 text-cyan-100" />
-                              <div className="text-sm font-bold text-white">{category.label}</div>
-                              <Badge className="bg-white/10 text-blue-100 border-none ml-auto">{ownedItems.length}</Badge>
-                            </div>
-                            {ownedItems.length > 0 ? (
-                              <div className="flex flex-wrap gap-2">
-                                {ownedItems.map((item) => {
-                                  const isEquipped = (profileState.equippedItems || []).includes(item.id);
-                                  const isActiveTheme = item.themeId && themeId === item.themeId;
-                                  const isActive = isEquipped || isActiveTheme;
-                                  return (
-                                    <Button
-                                      key={item.id}
-                                      type="button"
-                                      size="sm"
-                                      onClick={() => {
-                                        if (item.themeId) {
-                                          activateUpgrade(item);
-                                        } else if (item.category !== "upgrades") {
-                                          toggleEquipItem(item.id);
-                                        }
-                                      }}
-                                      className={`h-auto min-h-8 px-3 py-1.5 rounded-full text-xs font-medium border ${isActive ? "bg-emerald-400/20 text-emerald-50 border-emerald-300/30 hover:bg-emerald-400/30" : "bg-white/10 text-blue-100 border-white/10 hover:bg-white/15"}`}
-                                    >
-                                      {item.emoji ? `${item.emoji} ` : ""}
-                                      {item.name}
-                                    </Button>
-                                  );
-                                })}
-                              </div>
-                            ) : (
-                              <div className="text-sm text-blue-100/55">No items purchased yet.</div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
+                  </div>
+                </CardContent>
+              </Card>
 
               {showInfo && (
                 <Card className="bg-white/10 border-white/10 rounded-3xl shadow-2xl overflow-hidden">
@@ -2641,21 +5074,13 @@ export default function NSWProgressionsMathGame() {
                                 <Badge className="bg-cyan-400/20 text-cyan-50 border-none">{item.skill}</Badge>
                               </div>
                               <div className="space-y-3 pt-1">
-                                {Array.isArray(item.entries) ? (
-                                  item.entries.map((entry, index) => (
-                                    <div key={index} className="rounded-xl bg-white/5 border border-white/10 p-3 space-y-1">
-                                      <div className="text-white text-sm font-semibold">{entry.type}</div>
-                                      <div className="text-white/80 text-sm"><span className="font-semibold">Example:</span> {entry.example}</div>
-                                      <div className="text-emerald-100 text-sm"><span className="font-semibold">Best strategy:</span> {entry.strategy}</div>
-                                    </div>
-                                  ))
-                                ) : (
-                                  <div className="rounded-xl bg-white/5 border border-white/10 p-3 space-y-1">
-                                    <div className="text-white/90 text-sm"><span className="font-semibold">Question types:</span> {Array.isArray(item.types) ? item.types.join(" • ") : item.types || "Not listed"}</div>
-                                    <div className="text-white/80 text-sm"><span className="font-semibold">Examples:</span> {Array.isArray(item.examples) ? item.examples.join(" • ") : item.examples || "Not listed"}</div>
-                                    <div className="text-emerald-100 text-sm"><span className="font-semibold">Best strategy:</span> {item.strategy || "Use the level strategy notes."}</div>
+                                {item.entries.map((entry, index) => (
+                                  <div key={index} className="rounded-xl bg-white/5 border border-white/10 p-3 space-y-1">
+                                    <div className="text-white text-sm font-semibold">{entry.type}</div>
+                                    <div className="text-white/80 text-sm"><span className="font-semibold">Example:</span> {entry.example}</div>
+                                    <div className="text-emerald-100 text-sm"><span className="font-semibold">Best strategy:</span> {entry.strategy}</div>
                                   </div>
-                                )}
+                                ))}
                               </div>
                             </div>
                           ))}
@@ -2671,21 +5096,13 @@ export default function NSWProgressionsMathGame() {
                                 <Badge className="bg-cyan-400/20 text-cyan-50 border-none">{item.skill}</Badge>
                               </div>
                               <div className="space-y-3 pt-1">
-                                {Array.isArray(item.entries) ? (
-                                  item.entries.map((entry, index) => (
-                                    <div key={index} className="rounded-xl bg-white/5 border border-white/10 p-3 space-y-1">
-                                      <div className="text-white text-sm font-semibold">{entry.type}</div>
-                                      <div className="text-white/80 text-sm"><span className="font-semibold">Example:</span> {entry.example}</div>
-                                      <div className="text-emerald-100 text-sm"><span className="font-semibold">Best strategy:</span> {entry.strategy}</div>
-                                    </div>
-                                  ))
-                                ) : (
-                                  <div className="rounded-xl bg-white/5 border border-white/10 p-3 space-y-1">
-                                    <div className="text-white/90 text-sm"><span className="font-semibold">Question types:</span> {Array.isArray(item.types) ? item.types.join(" • ") : item.types || "Not listed"}</div>
-                                    <div className="text-white/80 text-sm"><span className="font-semibold">Examples:</span> {Array.isArray(item.examples) ? item.examples.join(" • ") : item.examples || "Not listed"}</div>
-                                    <div className="text-emerald-100 text-sm"><span className="font-semibold">Best strategy:</span> {item.strategy || "Use the level strategy notes."}</div>
+                                {item.entries.map((entry, index) => (
+                                  <div key={index} className="rounded-xl bg-white/5 border border-white/10 p-3 space-y-1">
+                                    <div className="text-white text-sm font-semibold">{entry.type}</div>
+                                    <div className="text-white/80 text-sm"><span className="font-semibold">Example:</span> {entry.example}</div>
+                                    <div className="text-emerald-100 text-sm"><span className="font-semibold">Best strategy:</span> {entry.strategy}</div>
                                   </div>
-                                )}
+                                ))}
                               </div>
                             </div>
                           ))}
@@ -2696,262 +5113,725 @@ export default function NSWProgressionsMathGame() {
                 </Card>
               )}
 
-              {shopOpen && (
-                <Card className="bg-white/10 border-white/10 rounded-3xl shadow-2xl">
-                  <CardContent className="p-5 md:p-6 space-y-6">
-                    <div className="flex items-center justify-between gap-4">
-                      <div>
-                        <div className="text-blue-100/70 text-xs uppercase tracking-[0.25em] mb-2">Shop</div>
-                        <h3 className="text-2xl font-bold">Profile upgrades</h3>
+              <Card className={cn("rounded-3xl shadow-2xl overflow-hidden", homeShellClass)}>
+                <CardContent className="p-4 md:p-5 space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                    <Button
+                      type="button"
+                      onClick={() => { setShopOpen(false); setHomeModeGroup("testing"); }}
+                      className={cn(
+                        "h-auto rounded-3xl border text-left p-4 flex flex-col items-start gap-3 transition-all",
+                        homeModeGroup === "testing"
+                          ? (isBilleaMode ? billeaTileActiveClass : homeTileActiveClass)
+                          : (isBilleaMode ? billeaTileClass : homeTileBaseClass)
+                      )}
+                    >
+                      <div className="flex w-full items-start justify-between gap-3 min-h-[34px]">
+                        <Badge className={`${homeModeGroup === "testing" ? "bg-cyan-400/20 text-cyan-50" : currentTheme.accentBadge} border-none`}>Adaptive</Badge>
+                        <span className="text-xs font-semibold text-emerald-200">Start here</span>
                       </div>
-                      <div className="rounded-2xl bg-slate-900/60 border border-white/10 px-4 py-2 text-sm text-white font-semibold">
-                        Balance: {cheatModeActive ? "∞ coins" : `${profileState.coins} coins`}
+                      <div className="w-full space-y-1">
+                        <div className="text-lg md:text-xl font-bold text-white">Testing</div>
+                        {!minimalCopyMode && <div className="text-xs md:text-sm text-white/75 mt-1.5 leading-5">Save one strand to unlock that strand. Save both to unlock Mixed.</div>}
                       </div>
-                    </div>
+                    </Button>
 
-                    <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-4">
-                      {SHOP_CATEGORIES.map((category) => {
-                        const Icon = category.icon;
-                        const items = PROFILE_SHOP_ITEMS.filter((item) => item.category === category.id);
-                        return (
-                          <div key={category.id} className="rounded-3xl bg-slate-900/60 border border-white/10 p-4 space-y-4">
-                            <div className="flex items-center gap-3">
-                              <div className="w-12 h-12 rounded-2xl bg-cyan-500/20 flex items-center justify-center">
-                                <Icon className="w-6 h-6 text-cyan-100" />
+                    <Button
+                      type="button"
+                      onClick={() => { setShopOpen(false); setHomeModeGroup("practice"); }}
+                      disabled={practiceLocked}
+                      className={cn(
+                        "h-auto rounded-3xl border text-left p-4 flex flex-col items-start gap-3 transition-all",
+                        homeModeGroup === "practice"
+                          ? (isBilleaMode ? billeaTileActiveClass : homeTileActiveClass)
+                          : (isBilleaMode ? billeaTileClass : homeTileBaseClass),
+                        practiceLocked && "opacity-55 bg-white/5 hover:bg-white/5"
+                      )}
+                    >
+                      <div className="flex w-full items-start justify-between gap-3 min-h-[34px]">
+                        <Badge className={`${homeModeGroup === "practice" ? "bg-cyan-400/20 text-cyan-50" : currentTheme.accentBadge} border-none`}>Skills</Badge>
+                        {practiceLocked ? <span className="text-xs font-semibold text-amber-200">Locked</span> : <span className="text-xs font-semibold text-emerald-200">Up to 3x coins</span>}
+                      </div>
+                      <div className="w-full space-y-1">
+                        <div className="text-lg md:text-xl font-bold text-white">Practise</div>
+                        {!minimalCopyMode && <div className="text-xs md:text-sm text-white/75 mt-1.5 leading-5">Practise AdS, MuS, or Mixed. Your saved current level gives 2x coins, and the 100-question round gives up to 3x coins.</div>}
+                      </div>
+                    </Button>
+
+                    <Button
+                      type="button"
+                      onClick={() => { setShopOpen(false); setHomeModeGroup("games"); }}
+                      disabled={gamesLocked}
+                      className={cn(
+                        "h-auto rounded-3xl border text-left p-4 flex flex-col items-start gap-3 transition-all",
+                        homeModeGroup === "games"
+                          ? (isBilleaMode ? billeaTileActiveClass : homeTileActiveClass)
+                          : (isBilleaMode ? billeaTileClass : homeTileBaseClass),
+                        gamesLocked && "opacity-55 bg-white/5 hover:bg-white/5"
+                      )}
+                    >
+                      <div className="flex w-full items-start justify-between gap-3 min-h-[34px]">
+                        <Badge className={`${homeModeGroup === "games" ? "bg-cyan-400/20 text-cyan-50" : currentTheme.accentBadge} border-none`}>Play</Badge>
+                        {gamesLocked && <span className="text-xs font-semibold text-amber-200">Locked</span>}
+                      </div>
+                      <div className="w-full space-y-1">
+                        <div className="text-lg md:text-xl font-bold text-white">Games</div>
+                        {!minimalCopyMode && <div className="text-xs md:text-sm text-white/75 mt-1.5 leading-5">Race only in strands that have already been saved.</div>}
+                      </div>
+                    </Button>
+
+                    <Button
+                      type="button"
+                      onClick={() => setShopOpen((open) => !open)}
+                      className={cn(
+                        "h-auto rounded-3xl border text-left p-4 flex flex-col items-start gap-3 transition-all",
+                        shopOpen
+                          ? (isBilleaMode ? billeaTileActiveClass : homeTileActiveClass)
+                          : (isBilleaMode ? billeaTileClass : homeTileBaseClass)
+                      )}
+                    >
+                      <div className="flex w-full items-start justify-between gap-3 min-h-[34px]">
+                        <Badge className={`${shopOpen ? "bg-cyan-400/20 text-cyan-50" : currentTheme.accentBadge} border-none`}>Shop</Badge>
+                        <ShoppingBag className="w-4 h-4 text-cyan-100" />
+                      </div>
+                      <div className="w-full space-y-1">
+                        <div className="text-lg md:text-xl font-bold text-white">{minimalCopyMode ? "Shop" : shopOpen ? "Close Shop" : "Open Shop"}</div>
+                        {!minimalCopyMode && <div className="text-xs md:text-sm text-white/75 mt-1.5 leading-5">Buy emoji, backgrounds, rings and upgrades.</div>}
+                      </div>
+                    </Button>
+                  </div>
+
+                  {shopOpen ? (
+                    <div className="rounded-3xl bg-slate-950/70 border border-white/10 p-4 md:p-5 space-y-5">
+                      <div className="flex items-center justify-between gap-4 flex-wrap">
+                        <h3 className="text-xl font-bold text-white">Shop</h3>
+                        <div className="rounded-2xl bg-slate-900/60 border border-white/10 px-4 py-2 text-sm text-white font-semibold">
+                          Balance: {cheatModeActive ? "∞ coins" : `${profileState.coins} coins`}
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                        {SHOP_CATEGORIES.map((category) => {
+                          const Icon = category.icon;
+                          const active = selectedShopCategory === category.id;
+                          const itemCount = category.id === "achievements"
+                            ? achievementItems.length
+                            : PROFILE_SHOP_ITEMS.filter((item) => item.category === category.id && !item.achievementOnly).length;
+
+                          return (
+                            <Button
+                              key={category.id}
+                              type="button"
+                              onClick={() => setSelectedShopCategory(category.id)}
+                              className={cn(
+                                "h-auto rounded-3xl border text-left p-4 flex flex-col items-start gap-3 transition-all",
+                                active
+                                  ? (isBilleaMode ? billeaTileActiveClass : homeTileActiveClass)
+                                  : (isBilleaMode ? billeaTileClass : homeTileBaseClass)
+                              )}
+                            >
+                              <div className="flex w-full items-start justify-between gap-3 min-h-[34px]">
+                                <Badge className={`${active ? "bg-cyan-400/20 text-cyan-50" : currentTheme.accentBadge} border-none`}>
+                                  {category.label}
+                                </Badge>
+                                <Icon className="w-4 h-4 text-cyan-100" />
                               </div>
-                              <div>
-                                <div className="text-lg font-bold text-white">{category.label}</div>
-                                <div className="text-xs text-white/70 uppercase tracking-[0.2em]">{items.length} items</div>
-                              </div>
+                              <div className="text-xs text-white/75">{itemCount} items</div>
+                            </Button>
+                          );
+                        })}
+                      </div>
+
+                      {selectedShopCategory === "achievements" ? (
+                        <div className="rounded-3xl bg-slate-900/60 border border-white/10 p-4 space-y-4">
+                          <div className="flex items-center justify-between gap-3 flex-wrap">
+                            <div>
+                              <div className="text-lg font-bold text-white">Achievements</div>
+                              <div className="text-xs text-white/70 uppercase tracking-[0.2em] mt-1">Exclusive rewards earned from playing</div>
                             </div>
-                            <div className="space-y-2 max-h-[430px] overflow-auto pr-1">
-                              {items.map((item) => {
+                            <div className="rounded-2xl bg-slate-950/70 border border-white/10 px-3 py-2 text-xs text-white/75">
+                              {achievementItems.filter((item) => isAchievementUnlocked(item, achievementMetrics)).length} / {achievementItems.length} unlocked
+                            </div>
+                          </div>
+
+                          <div className="grid md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6 gap-4 items-start">
+                            {[
+                              { id: "timeSpentSeconds", label: "Time played", items: sortAchievementItems(achievementItems.filter((item) => item.achievementMetric === "timeSpentSeconds")) },
+                              { id: "bestStreak", label: "Streak", items: sortAchievementItems(achievementItems.filter((item) => item.achievementMetric === "bestStreak")) },
+                              { id: "coinsEarned", label: "Coins earned", items: sortAchievementItems(achievementItems.filter((item) => item.achievementMetric === "coinsEarned")) },
+                              { id: "coinsSpent", label: "Coins spent", items: sortAchievementItems(achievementItems.filter((item) => item.achievementMetric === "coinsSpent")) },
+                              { id: "totalCorrect", label: "Correct answers", items: sortAchievementItems(achievementItems.filter((item) => item.achievementMetric === "totalCorrect")) },
+                              { id: "games", label: "Game modes", items: sortAchievementItems(achievementItems.filter((item) => item.achievementMetric === "raceWins" || item.achievementMetric === "bestTimeTrialScore")) },
+                            ].map((section) => {
+                              const unlockedCount = section.items.filter((item) => isAchievementUnlocked(item, achievementMetrics)).length;
+
+                              return (
+                                <div key={section.id} className="rounded-3xl bg-slate-950/55 border border-white/10 p-4 space-y-3 h-full">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <div className="text-sm font-bold text-white uppercase tracking-[0.16em]">{section.label}</div>
+                                    <Badge className="bg-white/10 text-white/75 border-none">{unlockedCount}/{section.items.length}</Badge>
+                                  </div>
+
+                                  <div className="space-y-3">
+                                    {section.items.map((item) => {
+                                      const unlocked = isAchievementUnlocked(item, achievementMetrics);
+                                      const owned = (profileState.ownedItems || []).includes(item.id);
+                                      const equipped = (profileState.equippedItems || []).includes(item.id);
+                                      const isThemeActive = Boolean(item.themeId && themeId === item.themeId);
+
+                                      return (
+                                        <div key={item.id} className={cn("rounded-2xl border px-3 py-3 flex flex-col gap-3", unlocked ? "bg-slate-950/75 border-white/12" : "bg-slate-950/45 border-white/8 opacity-80")}>
+                                          <div className="flex items-start justify-between gap-2">
+                                            <Badge className={`${unlocked ? "bg-emerald-400/18 text-emerald-100" : "bg-white/10 text-white/70"} border-none`}>
+                                              {item.category === "upgrades" ? "Theme" : item.category === "emoji" ? "Icon" : item.category === "background" ? "Background" : "Ring"}
+                                            </Badge>
+                                            <div className="text-[10px] uppercase tracking-[0.16em] text-white/55">{unlocked ? "Unlocked" : "Locked"}</div>
+                                          </div>
+
+                                          <div className="flex-1 flex flex-col items-center text-center gap-3">
+                                            {item.category === "emoji" ? (
+                                              <div className="text-5xl leading-none">{item.emoji}</div>
+                                            ) : item.category === "background" ? (
+                                              <div className="w-14 h-14 rounded-full border border-white/10 overflow-hidden">
+                                                <div className={`w-full h-full ${item.style}`} />
+                                              </div>
+                                            ) : item.category === "ring" ? (
+                                              <div className="relative w-14 h-14">
+                                                <div className={`absolute inset-0 rounded-full pointer-events-none ${item.style}`} />
+                                                <div className="absolute inset-[7px] rounded-full bg-slate-900/95 border border-white/10" />
+                                              </div>
+                                            ) : (
+                                              <div className="w-full space-y-2">
+                                                <div className="w-14 h-14 mx-auto rounded-full border border-white/10 bg-slate-900/70 flex items-center justify-center text-2xl">🎨</div>
+                                                {item.themeId && (
+                                                  <div className={cn("w-full h-5 rounded-full text-[10px] font-semibold flex items-center justify-center border", getThemeShopBarClass(item.themeId, unlocked || owned))}>
+                                                    Theme hint
+                                                  </div>
+                                                )}
+                                              </div>
+                                            )}
+
+                                            <div>
+                                              <div className="text-sm font-semibold text-white">{item.name}</div>
+                                              <div className="text-xs text-white/65 mt-1">{formatAchievementRequirement(item)}</div>
+                                            </div>
+                                          </div>
+
+                                          <Button
+                                            type="button"
+                                            onClick={() => buyProfileItem(item.id)}
+                                            disabled={!unlocked}
+                                            className={cn(
+                                              "w-full rounded-2xl h-10 text-xs",
+                                              !unlocked
+                                                ? "bg-slate-700 text-slate-300"
+                                                : item.themeId
+                                                ? (isThemeActive ? "bg-emerald-500 hover:bg-emerald-400" : `${actionButtonClass} text-white`)
+                                                : equipped
+                                                ? "bg-emerald-500 hover:bg-emerald-400"
+                                                : owned
+                                                ? "bg-blue-500 hover:bg-blue-400"
+                                                : `${actionButtonClass} text-white`
+                                            )}
+                                          >
+                                            {item.themeId
+                                              ? (isThemeActive ? "Active theme" : unlocked ? "Apply theme" : "Locked")
+                                              : equipped
+                                              ? "Equipped"
+                                              : unlocked
+                                              ? (owned ? "Equip" : "Claim")
+                                              : "Locked"}
+                                          </Button>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="rounded-3xl bg-slate-900/60 border border-white/10 p-4 space-y-4">
+                          <div className="flex items-center justify-between gap-3 flex-wrap">
+                            <div className="text-lg font-bold text-white">
+                              {SHOP_CATEGORIES.find((category) => category.id === selectedShopCategory)?.label || "Items"}
+                            </div>
+                            {!minimalCopyMode && <div className="text-xs text-white/70 uppercase tracking-[0.2em]">Tap an item to buy or equip</div>}
+                          </div>
+
+                          {(selectedShopCategory === "emoji" || selectedShopCategory === "background" || selectedShopCategory === "ring" || selectedShopCategory === "upgrades") && (
+                            <div className="flex flex-wrap gap-2">
+                              {[
+                                { id: "standard", label: selectedShopCategory === "upgrades" ? "Standard Themes" : `Standard ${selectedShopCategory === "emoji" ? "Icons" : selectedShopCategory === "background" ? "Backgrounds" : "Rings"}` },
+                                { id: "teams", label: "Sport Teams" },
+                              ].map((tab) => {
+                                const activeTab = selectedShopCategory === "emoji"
+                                  ? emojiShopTab
+                                  : selectedShopCategory === "background"
+                                  ? backgroundShopTab
+                                  : selectedShopCategory === "ring"
+                                  ? ringShopTab
+                                  : upgradesShopTab;
+
+                                return (
+                                  <Button
+                                    key={tab.id}
+                                    type="button"
+                                    onClick={() => {
+                                      if (selectedShopCategory === "emoji") setEmojiShopTab(tab.id);
+                                      if (selectedShopCategory === "background") setBackgroundShopTab(tab.id);
+                                      if (selectedShopCategory === "ring") setRingShopTab(tab.id);
+                                      if (selectedShopCategory === "upgrades") setUpgradesShopTab(tab.id);
+                                    }}
+                                    className={cn(
+                                      "h-10 rounded-2xl border px-4 text-sm font-bold",
+                                      activeTab === tab.id ? `${actionButtonClass} text-white` : "bg-slate-900/60 border-white/10 text-white hover:bg-slate-800"
+                                    )}
+                                  >
+                                    {tab.label}
+                                  </Button>
+                                );
+                              })}
+                            </div>
+                          )}
+
+                          <div className={cn("grid gap-4", selectedShopCategory === "upgrades" ? "sm:grid-cols-2 lg:grid-cols-4" : "sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6")}>
+                            {PROFILE_SHOP_ITEMS
+                              .filter((item) => item.category === selectedShopCategory && !item.achievementOnly)
+                              .filter((item) => {
+                                if (selectedShopCategory === "emoji") {
+                                  return emojiShopTab === "teams" ? item.rarity === "team" : item.rarity !== "team";
+                                }
+                                if (selectedShopCategory === "background") {
+                                  return backgroundShopTab === "teams" ? sportBackgroundIds.has(item.id) : !sportBackgroundIds.has(item.id);
+                                }
+                                if (selectedShopCategory === "ring") {
+                                  return ringShopTab === "teams" ? sportRingIds.has(item.id) : !sportRingIds.has(item.id);
+                                }
+                                if (selectedShopCategory === "upgrades") {
+                                  const isSportTheme = Boolean(item.themeId && sportThemeIds.includes(item.themeId));
+                                  return upgradesShopTab === "teams" ? isSportTheme : !isSportTheme;
+                                }
+                                return true;
+                              })
+                              .map((item) => {
                                 const owned = (profileState.ownedItems || []).includes(item.id);
                                 const equipped = (profileState.equippedItems || []).includes(item.id);
                                 const canAfford = cheatModeActive || (profileState.coins || 0) >= item.cost;
                                 const isUpgrade = item.category === "upgrades";
+                                const isThemeActive = Boolean(item.themeId && themeId === item.themeId);
+
                                 return (
-                                  <div key={item.id} className="rounded-2xl bg-slate-950/60 border border-white/5 px-3 py-3 space-y-3">
-                                    <div className="flex items-start justify-between gap-3">
-                                      <div className="min-w-0">
-                                        <div className="flex items-center gap-2">
-                                          {item.emoji && <span className="text-xl">{item.emoji}</span>}
-                                          <span className="text-sm text-white font-semibold truncate">{item.name}</span>
+                                  <div key={item.id} className="rounded-2xl bg-slate-950/60 border border-white/5 px-3 py-3 h-full flex flex-col gap-3">
+                                    <div className="min-w-0 flex-1 flex flex-col items-center text-center gap-3">
+                                      {item.category === "emoji" ? (
+                                        <>
+                                          <div className="text-5xl leading-none">{item.emoji}</div>
+                                          <div className="text-sm text-white font-semibold">{item.name}</div>
+                                          {!minimalCopyMode && <div className="text-[10px] text-white/55">{item.rarity || "emoji"}</div>}
+                                        </>
+                                      ) : item.category === "background" ? (
+                                        <>
+                                          <div className="w-14 h-14 rounded-full border border-white/10 bg-slate-950/80 overflow-hidden flex items-center justify-center">
+                                            <div className={`w-full h-full ${item.style}`} />
+                                          </div>
+                                          <div className="text-sm text-white font-semibold">{item.name}</div>
+                                        </>
+                                      ) : item.category === "ring" ? (
+                                        <>
+                                          <div className="relative w-14 h-14">
+                                          {isPremiumRing(item.id) && <div className={`absolute -inset-1 rounded-full ${getPremiumRingOverlayClass(item.id)} blur-[1px] opacity-95`} />}
+                                          <div className={`absolute inset-0 rounded-full pointer-events-none ${item.style}`} />
+                                          <div className="absolute inset-[7px] rounded-full bg-slate-900/95 border border-white/10" />
                                         </div>
-                                        {item.detail && <div className="text-xs text-white/80 mt-1">{item.detail}</div>}
-                                        {item.themeId && <div className="text-[11px] text-emerald-200 mt-1">Permanent theme</div>}
-                                      </div>
-                                      <span className="text-xs text-amber-100 shrink-0">{item.cost}</span>
+                                          <div className="text-sm text-white font-semibold">{item.name}</div>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <div className="text-sm text-white font-semibold">{item.name}</div>
+                                          {item.detail && !minimalCopyMode && <div className="text-[11px] text-white/70 max-w-[16rem]">{item.detail}</div>}
+                                        </>
+                                      )}
                                     </div>
 
-                                    {item.category === "background" && (
-                                      <div className="flex items-center gap-3">
-                                        <div className={`w-10 h-10 rounded-full border border-white/10 ${item.style}`} />
-                                        <div className="text-[11px] uppercase tracking-[0.12em] text-white/70">Preview</div>
-                                      </div>
-                                    )}
-
-                                    {item.category === "ring" && (
-                                      <div className="flex items-center gap-3">
-                                        <div className="relative w-10 h-10">
-                                          {isPremiumRing(item.id) && (
-                                            <div className={`absolute -inset-1 rounded-full ${getPremiumRingOverlayClass(item.id)} blur-[1px] opacity-95`} />
-                                          )}
-                                          <div className={`absolute inset-1 rounded-full bg-slate-900 ${item.style}`} />
+                                    <div className="min-h-[20px] flex items-center justify-center w-full">
+                                      {item.themeId ? (
+                                        <div className={cn("w-full h-5 rounded-full text-[10px] font-semibold flex items-center justify-center border", getThemeShopBarClass(item.themeId, owned))}>
+                                          {owned ? "Purchased" : ""}
                                         </div>
-                                        <div className="text-[11px] uppercase tracking-[0.12em] text-white/70">Preview</div>
-                                      </div>
-                                    )}
+                                      ) : owned && !isUpgrade && !equipped ? (
+                                        <Badge className="bg-blue-500/20 text-blue-100 border-none text-[10px] px-2 py-0.5">Purchased</Badge>
+                                      ) : null}
+                                    </div>
 
                                     <Button
+                                      type="button"
                                       onClick={() => (owned && !isUpgrade ? toggleEquipItem(item.id) : buyProfileItem(item.id))}
                                       disabled={!owned && !canAfford}
-                                      className={`w-full rounded-2xl ${equipped ? "bg-emerald-500 hover:bg-emerald-400" : owned && !isUpgrade ? "bg-blue-500 hover:bg-blue-400" : "bg-cyan-500 hover:bg-cyan-400 disabled:bg-slate-700 disabled:text-slate-300"}`}
+                                      className={cn(
+                                        "w-full rounded-2xl h-10 mt-auto",
+                                        isBilleaMode
+                                          ? billeaActionButtonClass
+                                          : equipped || isThemeActive
+                                          ? "bg-emerald-500 hover:bg-emerald-400"
+                                          : owned && !isUpgrade
+                                          ? "bg-blue-500 hover:bg-blue-400"
+                                          : "bg-cyan-500 hover:bg-cyan-400 disabled:bg-slate-700 disabled:text-slate-300"
+                                      )}
                                     >
-                                      {item.themeId ? (themeId === item.themeId ? "Active theme" : owned ? "Apply theme" : "Buy theme") : isUpgrade ? "Buy & activate" : equipped ? "Equipped" : owned ? "Equip" : "Buy"}
+                                      {item.themeId
+                                        ? (isThemeActive ? "Active theme" : owned ? "Apply theme" : `Buy ${item.cost}`)
+                                        : isUpgrade
+                                        ? `Buy ${item.cost}`
+                                        : equipped
+                                        ? "Equipped"
+                                        : owned
+                                        ? "Equip"
+                                        : `Buy ${item.cost}`}
                                     </Button>
                                   </div>
                                 );
                               })}
-                            </div>
                           </div>
-                        );
-                      })}
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-
-              <div className="space-y-5">
-                <div className="grid md:grid-cols-3 gap-5">
-                  {(["addsub", "muldiv", "mixed"]).map((key) => {
-                    const item = modeMeta[key];
-                    const practiceLocked = !hasCompletedTesting;
-                    return (
-                      <Card key={key} className={`bg-white/10 border-white/10 rounded-3xl shadow-2xl ${practiceLocked ? "opacity-55" : ""}`}>
-                        <CardContent className="p-6 flex flex-col gap-4 h-full">
-                          <div className="flex items-start justify-between gap-3">
-                            <Badge className={`w-fit shrink-0 ${currentTheme.accentBadge} border-none`}>Game Mode</Badge>
-                            <div className="text-right text-[11px] md:text-sm font-semibold leading-tight whitespace-nowrap ml-auto">
-                              {key === "addsub" && <span className="text-emerald-200">🪙 +1 per ✓ • Bonuses on 14+</span>}
-                              {key === "muldiv" && <span className="text-emerald-200">🪙 +1 per ✓ • Bonuses on 14+</span>}
-                              {key === "mixed" && <span className="text-cyan-200">🪙 +1.5 per ✓ • Bonuses on 14+</span>}
-                            </div>
-                          </div>
-                          <h2 className="text-2xl font-bold text-white">{item.title}</h2>
-                          <div className="text-white/85 min-h-[92px] space-y-2">
-                            <p>{item.description}</p>
-                            {practiceLocked && <p className="text-amber-200 font-semibold">Complete Testing Mode first to unlock practice modes.</p>}
-                          </div>
-                          <Button
-                            onClick={() => startMode(key)}
-                            disabled={practiceLocked}
-                            className={`rounded-2xl text-base py-6 ${currentTheme.primaryButton} text-white mt-auto disabled:bg-slate-700 disabled:text-slate-300`}
-                          >
-                            {`Choose ${item.title}`}
-                          </Button>
-                        </CardContent>
-                      </Card>
-                    );
-                  })}
-                </div>
-
-                <div className="grid md:grid-cols-2 gap-5">
-                  {(["testing", "multiplayer"]).map((key) => {
-                    const item = modeMeta[key];
-                    return (
-                      <Card key={key} className={`bg-white/10 border-white/10 rounded-3xl shadow-2xl ${key === "multiplayer" && !hasCompletedTesting ? "opacity-55" : ""}`}>
-                        <CardContent className="p-6 flex flex-col gap-4 h-full">
-                          <div className="flex flex-wrap items-start justify-between gap-3">
-                            <Badge className={`w-fit ${currentTheme.accentBadge} border-none`}>{key === "testing" ? "Adaptive" : "Race Mode"}</Badge>
-                            <div className="text-right text-xs md:text-sm font-semibold">
-                              {key === "testing" && <span className="text-emerald-200">🪙 Double coins</span>}
-                              {key === "multiplayer" && <span className="text-cyan-200">🪙 1st 30 • 2nd 20 • 3rd 10 • 4th 5</span>}
-                            </div>
-                          </div>
-                          <h2 className="text-2xl font-bold text-white">{key === "multiplayer" ? "Race Mode" : item.title}</h2>
-                          <div className="text-white/85 min-h-[92px] space-y-2">
-                            <p>{item.description}</p>
-                            {key === "multiplayer" && <p className="text-cyan-200 font-semibold">Race Mode unlocks after Testing Mode is completed.</p>}
-                            {key === "multiplayer" && !hasCompletedTesting && <p className="text-amber-200 font-semibold">Complete Testing Mode first to unlock Race Mode.</p>}
-                            {key === "testing" && <p className="text-blue-100/70">Completing Testing Mode unlocks practice modes and Race Mode.</p>}
-                          </div>
-                          <Button
-                            onClick={() => startMode(key)}
-                            className={`rounded-2xl text-base py-6 ${currentTheme.primaryButton} text-white mt-auto`}
-                          >
-                            {key === "testing" ? "Start Testing" : "Enter Race Mode"}
-                          </Button>
-                        </CardContent>
-                      </Card>
-                    );
-                  })}
-                </div>
-              </div>
-            </motion.div>
-          )}
-
-          {screen === "levels" && (
-            <motion.div
-              key="levels"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-            >
-              <Card className="bg-white/10 border-white/10 rounded-3xl shadow-2xl">
-                <CardContent className="p-6 md:p-8">
-                  <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
-                    <div>
-                      <h2 className="text-2xl md:text-3xl font-bold">Select a progression level</h2>
-                      <p className="text-blue-100/80 mt-2">
-                        {modeMeta[mode]?.title} • Students answer 15 questions against the clock.
-                      </p>
-                    </div>
-                    <Button variant="outline" onClick={backToHome} className="rounded-2xl border-white/20 bg-white/5 text-white hover:bg-white/10">
-                      Back
-                    </Button>
-                  </div>
-
-                  {mode === "mixed" ? (
-                    <div className="grid md:grid-cols-2 gap-6">
-                      <div className="rounded-3xl bg-slate-900/50 border border-white/10 p-5">
-                        <div className="text-blue-100/70 text-xs uppercase tracking-[0.25em] mb-2">Step 1</div>
-                        <h3 className="text-xl font-bold mb-4">Choose an AdS level</h3>
-                        <p className="text-sm text-blue-100/70 mb-4">Your current AdS level is highlighted. Matching it gives double coins.</p>
-                        <div className="grid grid-cols-2 gap-3">
-                          {progressionOrder.addsub.map((lvl) => {
-                            const isCurrent = lvl === userHistory.addsubLevel;
-                            const isSelected = mixedSelection.addsubLevel === lvl;
-                            return (
-                              <Button
-                                key={lvl}
-                                onClick={() => startMixedLevelSelection("addsubLevel", lvl)}
-                                className={`h-14 rounded-2xl text-base font-bold ${isSelected ? "bg-cyan-500 hover:bg-cyan-400" : isCurrent ? "bg-slate-800 hover:bg-slate-700 ring-2 ring-emerald-300/80 border border-emerald-300/70" : "bg-slate-800 hover:bg-slate-700"}`}
-                              >
-                                <div className="flex flex-col items-center leading-tight">
-                                <span>{lvl}</span>
-                                {isCurrent && <span className="mt-1 text-[10px] uppercase tracking-[0.08em] text-emerald-100">Double coins</span>}
-                              </div>
-                              </Button>
-                            );
-                          })}
                         </div>
-                      </div>
-
-                      <div className="rounded-3xl bg-slate-900/50 border border-white/10 p-5">
-                        <div className="text-blue-100/70 text-xs uppercase tracking-[0.25em] mb-2">Step 2</div>
-                        <h3 className="text-xl font-bold mb-4">Choose a MuS level</h3>
-                        <p className="text-sm text-blue-100/70 mb-4">Your current MuS level is highlighted. Matching it gives double coins.</p>
-                        <div className="grid grid-cols-2 gap-3">
-                          {progressionOrder.muldiv.map((lvl) => {
-                            const isCurrent = lvl === userHistory.muldivLevel;
-                            const isSelected = mixedSelection.muldivLevel === lvl;
-                            return (
-                              <Button
-                                key={lvl}
-                                onClick={() => startMixedLevelSelection("muldivLevel", lvl)}
-                                className={`h-14 rounded-2xl text-base font-bold ${isSelected ? "bg-cyan-500 hover:bg-cyan-400" : isCurrent ? "bg-slate-800 hover:bg-slate-700 ring-2 ring-emerald-300/80 border border-emerald-300/70" : "bg-slate-800 hover:bg-slate-700"}`}
-                              >
-                                <div className="flex flex-col items-center leading-tight">
-                                <span>{lvl}</span>
-                                {isCurrent && <span className="mt-1 text-[10px] uppercase tracking-[0.08em] text-emerald-100">Double coins</span>}
-                              </div>
-                              </Button>
-                            );
-                          })}
-                        </div>
-                      </div>
-
-                      <div className="md:col-span-2 rounded-3xl bg-white/5 border border-white/10 p-4 flex flex-wrap items-center justify-between gap-3">
-                        <div className="text-sm text-blue-100/80">
-                          Current mixed setup: <span className="font-bold text-white">{mixedSelection.addsubLevel || "Choose AdS"}</span> + <span className="font-bold text-white">{mixedSelection.muldivLevel || "Choose MuS"}</span>
-                          <span className="block mt-2 text-emerald-200 font-semibold">Pick both highlighted current levels to get double coins.</span>
-                        </div>
-                        {mixedSelection.addsubLevel && mixedSelection.muldivLevel && (
-                          <Button onClick={() => startLevel(mixedSelection, { selectedMode: "mixed" })} className={`rounded-2xl ${currentTheme.primaryButton} text-white font-bold`}>
-                            Start Mixed Round
-                          </Button>
-                        )}
-                      </div>
+                      )}
                     </div>
                   ) : (
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                      {progressionOrder[mode]?.map((lvl) => {
-                        const currentLevel = mode === "addsub" ? userHistory.addsubLevel : userHistory.muldivLevel;
-                        const isCurrent = lvl === currentLevel;
-                        return (
-                          <Button
-                            key={lvl}
-                            onClick={() => startLevel(lvl)}
-                            className={`h-16 rounded-2xl text-lg font-bold ${isCurrent ? "bg-slate-800 hover:bg-slate-700 ring-2 ring-emerald-300/80 border border-emerald-300/70" : "bg-slate-800 hover:bg-slate-700"}`}
-                          >
-                            <div className="flex flex-col items-center justify-center leading-tight">
-                            <span>{lvl}</span>
-                            {isCurrent && <span className="mt-1 text-[10px] uppercase tracking-[0.08em] text-emerald-100">Double coins</span>}
+                    <div className="rounded-3xl bg-slate-950/70 border border-white/10 p-4 md:p-5 space-y-4">
+                      {homeModeGroup === "practice" && (
+                        <>
+                          <div className="flex flex-wrap items-center justify-between gap-3">
+                            <div>
+                              <div className="text-white/70 text-xs uppercase tracking-[0.22em] mb-2">Practise options</div>
+                              <h3 className="text-xl font-bold text-white">Choose a practise mode</h3>
+                            </div>
+                            {!minimalCopyMode && <div className="text-right text-xs md:text-sm font-semibold text-amber-200">{hasAnyPlacement ? "Only 100 questions gives 3x coins" : "Complete a test first"}</div>}
                           </div>
-                          </Button>
-                        );
-                      })}
+                          <div className="grid md:grid-cols-3 gap-4">
+                            {[
+                              { key: "addsub", coins: "🪙 +1 per ✓", unlocked: hasAddSubPlacement },
+                              { key: "muldiv", coins: "🪙 +1 per ✓", unlocked: hasMulDivPlacement },
+                              { key: "mixed", coins: "🪙 +1.5 per ✓", unlocked: hasMixedPlacement },
+                            ].map((item) => {
+                              const meta = modeMeta[item.key];
+                              return (
+                                <Card key={item.key} className={`bg-white/5 border-white/10 rounded-3xl ${!item.unlocked ? "opacity-55" : ""}`}>
+                                  <CardContent className="p-4 flex flex-col gap-3 h-full">
+                                    <div className="flex items-start justify-between gap-3">
+                                      <Badge className={`${accentPillClass} border-none`}>Practice</Badge>
+                                      {practiceLocked ? <span className="text-xs font-semibold text-amber-200">Locked</span> : <span className="text-xs font-semibold text-emerald-200">{item.coins}</span>}
+                                    </div>
+                                    <h4 className="text-xl font-bold text-white">{meta.title}</h4>
+                                    <div className="text-white/85 min-h-[64px] space-y-2">
+                                      {!minimalCopyMode && <p>{meta.description}</p>}
+                                      {!hasAnyPlacement && <p className="text-amber-200 font-semibold">Complete at least one test first to unlock practise modes.</p>}
+                                      {hasAnyPlacement && !item.unlocked && item.key === "addsub" && <p className="text-amber-200 font-semibold">Save an AdS test first to unlock this mode.</p>}
+                                      {hasAnyPlacement && !item.unlocked && item.key === "muldiv" && <p className="text-amber-200 font-semibold">Save a MuS test first to unlock this mode.</p>}
+                                      {hasAnyPlacement && !item.unlocked && item.key === "mixed" && <p className="text-amber-200 font-semibold">Save both AdS and MuS tests to unlock Mixed practice.</p>}
+                                    </div>
+                                    <Button onClick={() => startMode(item.key)} disabled={!item.unlocked} className={`rounded-2xl text-sm py-3.5 ${actionButtonClass} text-white mt-auto disabled:bg-slate-700 disabled:text-slate-300`}>
+                                      {`Choose ${meta.title}`}
+                                    </Button>
+                                  </CardContent>
+                                </Card>
+                              );
+                            })}
+                          </div>
+                        </>
+                      )}
+
+                      {homeModeGroup === "testing" && (
+                        <>
+                          <div className="flex flex-wrap items-center justify-between gap-3">
+                            <h3 className="text-xl font-bold text-white">Adaptive placement</h3>
+                            {!minimalCopyMode && <div className="text-right text-xs md:text-sm font-semibold text-emerald-200">🪙 Double coins in testing</div>}
+                          </div>
+                          <div className="grid md:grid-cols-3 gap-4">
+                            <Card className="bg-white/5 border-white/10 rounded-3xl">
+                              <CardContent className="p-4 flex flex-col gap-3 h-full">
+                                <div className="flex flex-wrap items-start justify-between gap-3">
+                                  <Badge className={`${accentPillClass} border-none`}>Unlocks everything</Badge>
+                                  <div className="text-sm text-emerald-200 font-semibold">Best first step</div>
+                                </div>
+                                <h4 className="text-xl font-bold text-white">Mixed Testing</h4>
+                                <div className="grid gap-2 mt-auto">
+                                  <Button onClick={() => startTestingMode("mixed")} className={`rounded-2xl text-sm py-3.5 ${actionButtonClass} text-white`}>
+                                    {minimalCopyMode ? "Start Mixed" : "Start Mixed Testing"}
+                                  </Button>
+                                  <Button
+                                    onClick={() => {
+                                      setManualTestingStart({
+                                        addsubLevel: testingScores.addsubScore !== null ? userHistory.addsubLevel : "AdS3",
+                                        muldivLevel: testingScores.muldivScore !== null ? userHistory.muldivLevel : "MuS3",
+                                      });
+                                      setTestingStartSelector(testingStartSelector === "mixed" ? null : "mixed");
+                                    }}
+                                    variant="outline"
+                                    className="h-9 rounded-2xl border-white/30 bg-white/14 px-3 text-xs text-white hover:bg-white/20"
+                                  >
+                                    Know your level?
+                                  </Button>
+                                </div>
+                              </CardContent>
+                            </Card>
+
+                            <Card className="bg-white/5 border-white/10 rounded-3xl">
+                              <CardContent className="p-4 flex flex-col gap-3 h-full">
+                                <div className="flex flex-wrap items-start justify-between gap-3">
+                                  <Badge className={`${accentPillClass} border-none`}>Unlocks AdS only</Badge>
+                                  <div className="text-sm text-white/75">Single strand</div>
+                                </div>
+                                <h4 className="text-xl font-bold text-white">AdS Testing</h4>
+                                <div className="grid gap-2 mt-auto">
+                                  <Button onClick={() => startTestingMode("addsub")} className={`rounded-2xl text-sm py-3.5 ${actionButtonClass} text-white`}>
+                                    {minimalCopyMode ? "Test AdS" : "Test AdS Only"}
+                                  </Button>
+                                  <Button
+                                    onClick={() => {
+                                      setManualTestingStart((current) => ({ ...current, addsubLevel: testingScores.addsubScore !== null ? userHistory.addsubLevel : "AdS3" }));
+                                      setTestingStartSelector(testingStartSelector === "addsub" ? null : "addsub");
+                                    }}
+                                    variant="outline"
+                                    className="h-9 rounded-2xl border-white/30 bg-white/14 px-3 text-xs text-white hover:bg-white/20"
+                                  >
+                                    Know your level?
+                                  </Button>
+                                </div>
+                              </CardContent>
+                            </Card>
+
+                            <Card className="bg-white/5 border-white/10 rounded-3xl">
+                              <CardContent className="p-4 flex flex-col gap-3 h-full">
+                                <div className="flex flex-wrap items-start justify-between gap-3">
+                                  <Badge className={`${accentPillClass} border-none`}>Unlocks MuS only</Badge>
+                                  <div className="text-sm text-white/75">Single strand</div>
+                                </div>
+                                <h4 className="text-xl font-bold text-white">MuS Testing</h4>
+                                <div className="grid gap-2 mt-auto">
+                                  <Button onClick={() => startTestingMode("muldiv")} className={`rounded-2xl text-sm py-3.5 ${actionButtonClass} text-white`}>
+                                    {minimalCopyMode ? "Test MuS" : "Test MuS Only"}
+                                  </Button>
+                                  <Button
+                                    onClick={() => {
+                                      setManualTestingStart((current) => ({ ...current, muldivLevel: testingScores.muldivScore !== null ? userHistory.muldivLevel : "MuS3" }));
+                                      setTestingStartSelector(testingStartSelector === "muldiv" ? null : "muldiv");
+                                    }}
+                                    variant="outline"
+                                    className="h-9 rounded-2xl border-white/30 bg-white/14 px-3 text-xs text-white hover:bg-white/20"
+                                  >
+                                    Know your level?
+                                  </Button>
+                                </div>
+                              </CardContent>
+                            </Card>
+                          </div>
+
+                          {testingStartSelector === "mixed" && (
+                            <div className="rounded-3xl bg-slate-900/60 border border-white/10 p-4 space-y-4">
+                              <div>
+                                <div className="text-white/70 text-xs uppercase tracking-[0.22em] mb-2">Know your level?</div>
+                                <h4 className="text-lg font-bold text-white">{minimalCopyMode ? "Start Mixed" : "Start Mixed Testing"} from chosen levels</h4>
+                              </div>
+                              <div className="grid md:grid-cols-2 gap-4">
+                                <div>
+                                  <div className="text-sm text-white/75 mb-2">Choose an AdS starting level</div>
+                                  <div className="grid grid-cols-4 gap-2">
+                                    {progressionOrder.addsub.map((lvl) => (
+                                      <Button key={lvl} type="button" onClick={() => setManualTestingStart((current) => ({ ...current, addsubLevel: lvl }))} className={`h-8 rounded-xl text-[11px] font-bold ${manualTestingStart.addsubLevel === lvl ? "bg-cyan-500 hover:bg-cyan-400" : "bg-white/12 hover:bg-white/18 border border-white/10"}`}>
+                                        {lvl}
+                                      </Button>
+                                    ))}
+                                  </div>
+                                </div>
+                                <div>
+                                  <div className="text-sm text-white/75 mb-2">Choose a MuS starting level</div>
+                                  <div className="grid grid-cols-3 gap-2">
+                                    {progressionOrder.muldiv.map((lvl) => (
+                                      <Button key={lvl} type="button" onClick={() => setManualTestingStart((current) => ({ ...current, muldivLevel: lvl }))} className={`h-8 rounded-xl text-[11px] font-bold ${manualTestingStart.muldivLevel === lvl ? "bg-cyan-500 hover:bg-cyan-400" : "bg-white/12 hover:bg-white/18 border border-white/10"}`}>
+                                        {lvl}
+                                      </Button>
+                                    ))}
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="flex flex-wrap gap-2">
+                                <Button onClick={() => startTestingMode("mixed", manualTestingStart)} className={`rounded-2xl text-sm py-3 ${actionButtonClass} text-white`}>
+                                  Start from {manualTestingStart.addsubLevel} + {manualTestingStart.muldivLevel}
+                                </Button>
+                                <Button onClick={() => setTestingStartSelector(null)} variant="outline" className="rounded-2xl border-white/20 bg-white/5 text-white hover:bg-white/10">Cancel</Button>
+                              </div>
+                            </div>
+                          )}
+
+                          {testingStartSelector === "addsub" && (
+                            <div className="rounded-3xl bg-slate-900/60 border border-white/10 p-4 space-y-4">
+                              <div>
+                                <div className="text-white/70 text-xs uppercase tracking-[0.22em] mb-2">Know your level?</div>
+                                <h4 className="text-lg font-bold text-white">Start AdS Testing from a chosen level</h4>
+                              </div>
+                              <div className="grid grid-cols-4 md:grid-cols-8 gap-2">
+                                {progressionOrder.addsub.map((lvl) => (
+                                  <Button key={lvl} type="button" onClick={() => setManualTestingStart((current) => ({ ...current, addsubLevel: lvl }))} className={`h-8 rounded-xl text-[11px] font-bold ${manualTestingStart.addsubLevel === lvl ? "bg-cyan-500 hover:bg-cyan-400" : "bg-white/12 hover:bg-white/18 border border-white/10"}`}>
+                                    {lvl}
+                                  </Button>
+                                ))}
+                              </div>
+                              <div className="flex flex-wrap gap-2">
+                                <Button onClick={() => startTestingMode("addsub", manualTestingStart.addsubLevel)} className={`rounded-2xl text-sm py-3 ${actionButtonClass} text-white`}>
+                                  Start from {manualTestingStart.addsubLevel}
+                                </Button>
+                                <Button onClick={() => setTestingStartSelector(null)} variant="outline" className="rounded-2xl border-white/20 bg-white/5 text-white hover:bg-white/10">Cancel</Button>
+                              </div>
+                            </div>
+                          )}
+
+                          {testingStartSelector === "muldiv" && (
+                            <div className="rounded-3xl bg-slate-900/60 border border-white/10 p-4 space-y-4">
+                              <div>
+                                <div className="text-white/70 text-xs uppercase tracking-[0.22em] mb-2">Know your level?</div>
+                                <h4 className="text-lg font-bold text-white">Start MuS Testing from a chosen level</h4>
+                              </div>
+                              <div className="grid grid-cols-3 md:grid-cols-5 gap-2">
+                                {progressionOrder.muldiv.map((lvl) => (
+                                  <Button key={lvl} type="button" onClick={() => setManualTestingStart((current) => ({ ...current, muldivLevel: lvl }))} className={`h-8 rounded-xl text-[11px] font-bold ${manualTestingStart.muldivLevel === lvl ? "bg-cyan-500 hover:bg-cyan-400" : "bg-white/12 hover:bg-white/18 border border-white/10"}`}>
+                                    {lvl}
+                                  </Button>
+                                ))}
+                              </div>
+                              <div className="flex flex-wrap gap-2">
+                                <Button onClick={() => startTestingMode("muldiv", manualTestingStart.muldivLevel)} className={`rounded-2xl text-sm py-3 ${actionButtonClass} text-white`}>
+                                  Start from {manualTestingStart.muldivLevel}
+                                </Button>
+                                <Button onClick={() => setTestingStartSelector(null)} variant="outline" className="rounded-2xl border-white/20 bg-white/5 text-white hover:bg-white/10">Cancel</Button>
+                              </div>
+                            </div>
+                          )}
+                        </>
+                      )}
+
+                      {homeModeGroup === "games" && (
+                        <>
+                          <div className="flex flex-wrap items-center justify-between gap-3">
+                            <div>
+                              <div className="text-white/70 text-xs uppercase tracking-[0.22em] mb-2">Game options</div>
+                              <h3 className="text-xl font-bold text-white">Play a game mode</h3>
+                            </div>
+                            
+                          </div>
+                          <div className="grid md:grid-cols-3 gap-4">
+                            <Card className={`bg-white/5 border-white/10 rounded-3xl ${gamesLocked ? "opacity-55" : ""}`}>
+                              <CardContent className="p-4 flex flex-col gap-3 h-full">
+                                <div className="flex flex-wrap items-start justify-between gap-3">
+                                  <Badge className={`${accentPillClass} border-none`}>Race Mode</Badge>
+                                  {!hasAnyPlacement && <div className="text-sm text-amber-200 font-semibold">Complete a test first</div>}
+                                </div>
+                                <h4 className="text-xl font-bold text-white">Race Mode</h4>
+                                <div className="text-white/85 min-h-[64px] space-y-2">
+                                  {!minimalCopyMode && <p>{modeMeta.multiplayer.description}</p>}
+                                  {!hasAnyPlacement && <p className="text-amber-200 font-semibold">Complete at least one test first to unlock race modes.</p>}
+                                  {hasAnyPlacement && !hasMixedPlacement && <p className="text-amber-200 font-semibold">Only saved test strands can race. Mixed unlocks after both AdS and MuS are saved.</p>}
+                                  {hasMixedPlacement && <p className="text-cyan-200 font-semibold">All race modes are unlocked.</p>}
+                                </div>
+                                <Button onClick={() => startMode("multiplayer")} disabled={!hasAnyPlacement} className={`rounded-2xl text-sm py-3.5 ${actionButtonClass} text-white mt-auto disabled:bg-slate-700 disabled:text-slate-300`}>
+                                  {minimalCopyMode ? "Start Race" : "Enter Race Mode"}
+                                </Button>
+                              </CardContent>
+                            </Card>
+
+                            <Card className={`bg-white/5 border-white/10 rounded-3xl ${gamesLocked ? "opacity-55" : ""}`}>
+                              <CardContent className="p-4 flex flex-col gap-3 h-full">
+                                <div className="flex flex-wrap items-start justify-between gap-3">
+                                  <Badge className={`${accentPillClass} border-none`}>Time Trial</Badge>
+                                  {!hasAnyPlacement && <div className="text-sm text-amber-200 font-semibold">Complete a test first</div>}
+                                </div>
+                                <h4 className="text-xl font-bold text-white">Time Trial</h4>
+                                <div className="text-white/85 min-h-[64px] space-y-2">
+                                  {!minimalCopyMode && <p>{modeMeta.timetrial.description}</p>}
+                                  {!hasAnyPlacement && <p className="text-amber-200 font-semibold">Complete at least one test first to unlock time trial.</p>}
+                                  {hasAnyPlacement && <p className="text-cyan-200 font-semibold">Saved scores and level leaderboards are tracked automatically.</p>}
+                                </div>
+                                <Button onClick={() => startMode("timetrial")} disabled={!hasAnyPlacement} className={`rounded-2xl text-sm py-3.5 ${actionButtonClass} text-white mt-auto disabled:bg-slate-700 disabled:text-slate-300`}>
+                                  {minimalCopyMode ? "Start Trial" : "Enter Time Trial"}
+                                </Button>
+                              </CardContent>
+                            </Card>
+
+                            <Card className={`bg-white/5 border-white/10 rounded-3xl ${gamesLocked ? "opacity-55" : ""}`}>
+                              <CardContent className="p-4 flex flex-col gap-3 h-full">
+                                <div className="flex flex-wrap items-start justify-between gap-3">
+                                  <Badge className={`${accentPillClass} border-none`}>Survival</Badge>
+                                  {!hasAnyPlacement && <div className="text-sm text-amber-200 font-semibold">Complete a test first</div>}
+                                </div>
+                                <h4 className="text-xl font-bold text-white">King of the Hill</h4>
+                                <div className="text-white/85 min-h-[64px] space-y-2">
+                                  {!minimalCopyMode && <p>{modeMeta.king.description}</p>}
+                                  {!hasAnyPlacement && <p className="text-amber-200 font-semibold">Complete at least one test first to unlock this mode.</p>}
+                                  {hasAnyPlacement && <p className="text-cyan-200 font-semibold">15 questions per round. Each new round gives you less time per question.</p>}
+                                </div>
+                                <Button onClick={() => startMode("king")} disabled={!hasAnyPlacement} className={`rounded-2xl text-sm py-3.5 ${actionButtonClass} text-white mt-auto disabled:bg-slate-700 disabled:text-slate-300`}>
+                                  Enter King of the Hill
+                                </Button>
+                              </CardContent>
+                            </Card>
+
+                            <Card className={`bg-white/5 border-white/10 rounded-3xl ${gamesLocked ? "opacity-55" : ""}`}>
+                              <CardContent className="p-4 flex flex-col gap-3 h-full">
+                                <div className="flex flex-wrap items-start justify-between gap-3">
+                                  <Badge className={`${accentPillClass} border-none`}>Head to head</Badge>
+                                  {!hasAnyPlacement && <div className="text-sm text-amber-200 font-semibold">Complete a test first</div>}
+                                </div>
+                                <h4 className="text-xl font-bold text-white">Tug of War</h4>
+                                <div className="text-white/85 min-h-[64px] space-y-2">
+                                  {!minimalCopyMode && <p>{modeMeta.tug.description}</p>}
+                                  {!hasAnyPlacement && <p className="text-amber-200 font-semibold">Complete at least one test first to unlock Tug of War.</p>}
+                                  {hasAnyPlacement && <p className="text-cyan-200 font-semibold">Beat 10 teacher opponents in a row before the rope gets dragged away.</p>}
+                                </div>
+                                <Button onClick={() => startMode("tug")} disabled={!hasAnyPlacement} className={`rounded-2xl text-sm py-3.5 ${actionButtonClass} text-white mt-auto disabled:bg-slate-700 disabled:text-slate-300`}>
+                                  Enter Tug of War
+                                </Button>
+                              </CardContent>
+                            </Card>
+
+                            <Card className={`bg-white/5 border-white/10 rounded-3xl ${gamesLocked ? "opacity-55" : ""}`}>
+                              <CardContent className="p-4 flex flex-col gap-3 h-full">
+                                <div className="flex flex-wrap items-start justify-between gap-3">
+                                  <Badge className={`${accentPillClass} border-none`}>Arcade</Badge>
+                                  {!hasAnyPlacement && <div className="text-sm text-amber-200 font-semibold">Complete a test first</div>}
+                                </div>
+                                <h4 className="text-xl font-bold text-white">Free Fall</h4>
+                                <div className="text-white/85 min-h-[64px] space-y-2">
+                                  {!minimalCopyMode && <p>{modeMeta.freefall.description}</p>}
+                                  {!hasAnyPlacement && <p className="text-amber-200 font-semibold">Complete at least one test first to unlock Free Fall.</p>}
+                                  {hasAnyPlacement && <p className="text-cyan-200 font-semibold">Start with 3 lives and answer before the boxes hit the bottom line.</p>}
+                                </div>
+                                <Button onClick={() => startMode("freefall")} disabled={!hasAnyPlacement} className={`rounded-2xl text-sm py-3.5 ${actionButtonClass} text-white mt-auto disabled:bg-slate-700 disabled:text-slate-300`}>
+                                  Enter Free Fall
+                                </Button>
+                              </CardContent>
+                            </Card>
+
+                            {[
+                              { title: "Mystery Mode", icon: Calculator },
+                            ].map((coming) => {
+                              const Icon = coming.icon;
+                              return (
+                                <Card key={coming.title} className="bg-white/5 border-white/10 rounded-3xl opacity-55">
+                                  <CardContent className="p-4 flex flex-col gap-3 h-full">
+                                    <div className="flex flex-wrap items-start justify-between gap-3 min-h-[34px]">
+                                      <Badge className={cn("bg-white/10 text-white border-none", isSportsTheme && "bg-slate-950/96 text-white border border-white/20")}>Coming soon</Badge>
+                                      <Icon className="w-5 h-5 text-white/55" />
+                                    </div>
+                                    <h4 className="text-xl font-bold text-white">{coming.title}</h4>
+                                    <div className="text-white/70 min-h-[64px]">We’ll build this mode later.</div>
+                                    <Button disabled className="rounded-2xl text-sm py-3.5 bg-slate-700 text-slate-300 mt-auto">Coming soon</Button>
+                                  </CardContent>
+                                </Card>
+                              );
+                            })}
+                          </div>
+                        </>
+                      )}
                     </div>
                   )}
                 </CardContent>
@@ -2965,25 +5845,30 @@ export default function NSWProgressionsMathGame() {
                 <CardContent className="p-6 md:p-8 space-y-6">
                   <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                     <div>
-                      <h2 className="text-2xl md:text-3xl font-bold">Choose your multiplayer race</h2>
-                      <p className="text-blue-100/80 mt-2">This uses your saved AdS or MuS level and matches you into a 4-player room.</p>
+                      <h2 className="text-2xl md:text-3xl font-bold">Choose your race</h2>
+                      <p className="text-blue-100/80 mt-2">Race to 30 correct answers against 3 opponents using your saved progression level.</p>
                     </div>
                     <Button variant="outline" onClick={backToHome} className="rounded-2xl border-white/20 bg-white/5 text-white hover:bg-white/10">Back</Button>
                   </div>
                   <div className="grid md:grid-cols-3 gap-4">
                     {[
-                      { key: "addsub", title: "Addition / Subtraction", detail: `Uses ${userHistory.addsubLevel}` },
-                      { key: "muldiv", title: "Multiplication / Division", detail: `Uses ${userHistory.muldivLevel}` },
-                      { key: "mixed", title: "Mixed", detail: "Uses your current saved level mix" },
+                      { key: "addsub", title: "Addition / Subtraction", detail: `Uses ${testingScores.addsubScore !== null ? userHistory.addsubLevel : "_____"}`, unlocked: hasAddSubPlacement },
+                      { key: "muldiv", title: "Multiplication / Division", detail: `Uses ${testingScores.muldivScore !== null ? userHistory.muldivLevel : "_____"}`, unlocked: hasMulDivPlacement },
+                      { key: "mixed", title: "Mixed", detail: hasMixedPlacement ? `Uses ${userHistory.addsubLevel} + ${userHistory.muldivLevel}` : "Requires both saved test strands", unlocked: hasMixedPlacement },
                     ].map((item) => (
-                      <Card key={item.key} className="bg-slate-900/60 border-white/10 rounded-3xl">
+                      <Card key={item.key} className={`bg-slate-900/60 border-white/10 rounded-3xl ${!item.unlocked ? "opacity-55" : ""}`}>
                         <CardContent className="p-5 space-y-4">
                           <div className="flex items-center gap-3">
                             <Users className="w-6 h-6 text-cyan-100" />
                             <h3 className="text-xl font-bold text-white">{item.title}</h3>
                           </div>
-                          <p className="text-blue-100/75">{item.detail}</p>
-                          <Button onClick={() => startMultiplayerLobby(item.key)} className="w-full rounded-2xl bg-cyan-500 hover:bg-cyan-400 text-white">Join Room</Button>
+                          <div className="space-y-2">
+                            <p className="text-blue-100/75">{item.detail}</p>
+                            {!item.unlocked && item.key === "addsub" && <p className="text-amber-200 text-sm font-semibold">Save an AdS test first to unlock this race.</p>}
+                            {!item.unlocked && item.key === "muldiv" && <p className="text-amber-200 text-sm font-semibold">Save a MuS test first to unlock this race.</p>}
+                            {!item.unlocked && item.key === "mixed" && <p className="text-amber-200 text-sm font-semibold">Save both AdS and MuS tests to unlock Mixed race mode.</p>}
+                          </div>
+                          <Button onClick={() => startMultiplayerLobby(item.key)} disabled={!item.unlocked} className="w-full rounded-2xl bg-cyan-500 hover:bg-cyan-400 text-white disabled:bg-slate-700 disabled:text-slate-300">Enter Race Track</Button>
                         </CardContent>
                       </Card>
                     ))}
@@ -2996,59 +5881,70 @@ export default function NSWProgressionsMathGame() {
           {screen === "multiplayerWaiting" && multiplayerState && (
             <motion.div key="multiplayerWaiting" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
               <Card className="bg-white/10 border-white/10 rounded-3xl shadow-2xl">
-                <CardContent className="p-8 md:p-10 text-center space-y-6">
-                  <Users className="w-16 h-16 mx-auto text-cyan-200" />
-                  <div>
-                    <h2 className="text-3xl md:text-4xl font-black">Waiting for players...</h2>
-                    <p className="text-blue-100/80 mt-2">
-                      Room found. {multiplayerState.selectedMode === "addsub"
-                        ? "Addition / Subtraction"
-                        : multiplayerState.selectedMode === "muldiv"
-                        ? "Multiplication / Division"
-                        : "Mixed"}{" "}•{" "}
-                      {typeof multiplayerState.raceLevel === "object"
-                        ? `${multiplayerState.raceLevel.addsubLevel} + ${multiplayerState.raceLevel.muldivLevel}`
-                        : multiplayerState.raceLevel}
-                    </p>
+                <CardContent className="p-6 md:p-8 space-y-6">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <Badge className="bg-cyan-500/20 text-cyan-50 border-none">Race Track</Badge>
+                    <Badge className="bg-purple-500/20 text-purple-50 border-none">{multiplayerState.selectedMode === "addsub" ? "Addition / Subtraction" : multiplayerState.selectedMode === "muldiv" ? "Multiplication / Division" : "Mixed"}</Badge>
+                    <Badge className="bg-emerald-500/20 text-emerald-50 border-none">First to {MULTIPLAYER_TARGET_SCORE}</Badge>
+                    <Badge className="bg-white/10 text-white border-none">Starts in {multiplayerState.waitTimeLeft}s</Badge>
+                    <Button variant="outline" onClick={backToHome} className={cn("ml-auto rounded-2xl", topControlButtonClass)}>Back to Home</Button>
                   </div>
-                  <div className="text-5xl font-black text-cyan-100">{multiplayerState.waitTimeLeft}s</div>
-                  <div className="grid md:grid-cols-4 gap-4 max-w-4xl mx-auto">
-                    {[
-                      { name: playerName?.trim() || "You", icon: "🙂", joined: true, isSelf: true },
-                      ...multiplayerState.opponents.map((opponent) => ({
-                        name: opponent.name,
-                        icon: opponent.icon,
-                        joined: opponent.joined,
-                        isSelf: false,
-                      })),
-                    ].map((player, index) => (
-                      <motion.div
-                        key={`${player.isSelf ? "self" : player.name}-${index}`}
-                        initial={{ opacity: 0, y: 8, scale: 0.96 }}
-                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                        className={`rounded-3xl border p-4 ${player.joined ? "bg-slate-900/60 border-white/10" : "bg-slate-900/30 border-white/5"}`}
-                      >
-                        {player.joined ? (
-                          <motion.div
-                            initial={{ opacity: 0.2, scale: 0.92 }}
-                            animate={{ opacity: [0.5, 1, 1], scale: [0.92, 1.04, 1] }}
-                            transition={{ duration: 0.45 }}
-                          >
-                            <div className="text-4xl mb-2">{player.icon}</div>
-                            <div className="font-bold text-white">{player.name}</div>
-                            <div className={`text-xs mt-1 ${player.isSelf ? "text-emerald-200" : "text-cyan-200 font-semibold"}`}>
-                              {player.isSelf ? "Joined room" : `${player.name} joined`}
-                            </div>
-                          </motion.div>
-                        ) : (
-                          <div className="py-4">
-                            <div className="h-10 w-10 rounded-full bg-white/10 mx-auto mb-3" />
-                            <div className="h-4 w-24 rounded-full bg-white/10 mx-auto mb-2" />
-                            <div className="text-xs text-blue-100/45">Searching...</div>
+
+                  <div className="rounded-3xl bg-slate-950/92 border border-white/10 p-5 space-y-4">
+                    <div className="flex items-center justify-between gap-3 text-sm text-blue-100/80">
+                      <span>Race begins soon</span>
+                      <span>{multiplayerState.waitTimeLeft}s</span>
+                    </div>
+                    <div className="h-3 rounded-full bg-slate-800 border border-white/10 overflow-hidden">
+                      <motion.div className="h-full bg-cyan-400" animate={{ width: `${((MULTIPLAYER_WAIT_SECONDS - multiplayerState.waitTimeLeft) / MULTIPLAYER_WAIT_SECONDS) * 100}%` }} transition={{ duration: 0.35 }} />
+                    </div>
+                    <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                      <div className="rounded-3xl bg-slate-900/70 border border-white/10 p-4 flex flex-col items-center text-center gap-3">
+                        <div className="relative w-20 h-20">
+                          {premiumRingOverlay && <div className={`absolute -inset-1 rounded-full opacity-95 ${premiumRingOverlay} blur-[1px]`} />}
+                          {equippedRingItem?.style && <div className={`absolute inset-0 rounded-full pointer-events-none ${equippedRingItem.style}`} />}
+                          <div className="absolute inset-[6px] rounded-full flex items-center justify-center border border-white/15 overflow-hidden isolate">
+                            <div className={getCircularBackgroundClass(equippedBackgroundItem?.style)} />
+                            {equippedEmojiItem ? <div className={getEmojiVisualClass(equippedEmojiItem.emoji, "text-4xl")}>{equippedEmojiItem.emoji}</div> : <UserCircle2 className="w-9 h-9 text-blue-100/85" />}
                           </div>
-                        )}
-                      </motion.div>
-                    ))}
+                        </div>
+                        <div>
+                          <div className="text-lg font-black text-white">{playerName?.trim() || "You"}</div>
+                          <div className="text-xs uppercase tracking-[0.16em] text-emerald-200">Ready</div>
+                        </div>
+                      </div>
+
+                      {multiplayerState.opponents.map((opponent) => (
+                        <div key={opponent.id} className="rounded-3xl bg-slate-900/70 border border-white/10 p-4 flex flex-col items-center text-center gap-3">
+                          {opponent.joined ? (
+                            <>
+                              <div className="relative w-20 h-20">
+                                {opponent.ringOverlay && <div className={`absolute -inset-1 rounded-full opacity-95 ${opponent.ringOverlay} blur-[1px]`} />}
+                                {opponent.ringStyle && <div className={`absolute inset-0 rounded-full pointer-events-none ${opponent.ringStyle}`} />}
+                                <div className="absolute inset-[6px] rounded-full flex items-center justify-center border border-white/15 overflow-hidden isolate">
+                                  <div className={getCircularBackgroundClass(opponent.backgroundStyle)} />
+                                  <div className={getEmojiVisualClass(opponent.icon, "text-4xl")}>{opponent.icon}</div>
+                                </div>
+                              </div>
+                              <div>
+                                <div className="text-lg font-black text-white">{opponent.name}</div>
+                                <div className="text-xs uppercase tracking-[0.16em] text-emerald-200">Joined</div>
+                              </div>
+                            </>
+                          ) : (
+                            <>
+                              <div className="w-20 h-20 rounded-full border border-dashed border-white/15 bg-slate-950/75 flex items-center justify-center text-xs font-bold uppercase tracking-[0.16em] text-white/45">
+                                ...
+                              </div>
+                              <div>
+                                <div className="text-lg font-black text-white/75">Searching...</div>
+                                <div className="text-xs uppercase tracking-[0.16em] text-cyan-100/65">Waiting to join</div>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </CardContent>
               </Card>
@@ -3056,382 +5952,1189 @@ export default function NSWProgressionsMathGame() {
           )}
 
           {screen === "multiplayerGame" && currentQuestion && multiplayerState && (
-            <motion.div key="multiplayerGame" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-5">
-              <Card className="bg-white/10 border-white/10 rounded-3xl shadow-2xl">
-                <CardContent className="p-5 md:p-6 space-y-5">
-                  <div className="flex flex-wrap items-center gap-3">
-                    <Badge className="bg-cyan-500/20 text-cyan-50 border-none">Multiplayer Race</Badge>
+            <motion.div key="multiplayerGame" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-3">
+              <Card className="bg-white/10 border-white/10 rounded-3xl shadow-2xl overflow-hidden">
+                <CardContent className="p-4 md:p-5 space-y-4">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge className="bg-cyan-500/20 text-cyan-50 border-none">Race Track</Badge>
                     <Badge className="bg-purple-500/20 text-purple-50 border-none">{multiplayerState.selectedMode === "addsub" ? "Addition / Subtraction" : multiplayerState.selectedMode === "muldiv" ? "Multiplication / Division" : "Mixed"}</Badge>
-                    <Badge className="bg-emerald-500/20 text-emerald-50 border-none">First to 30 correct</Badge>
-                    <Badge className="bg-white/10 text-white border-none">
-                      {typeof multiplayerState.raceLevel === "object"
-                        ? `${multiplayerState.raceLevel.addsubLevel} + ${multiplayerState.raceLevel.muldivLevel}`
-                        : `Level ${multiplayerState.raceLevel}`}
-                    </Badge>
+                    <Badge className="bg-emerald-500/20 text-emerald-50 border-none">First to {MULTIPLAYER_TARGET_SCORE}</Badge>
+                    <Badge className="bg-white/10 text-white border-none">{multiplayerState.elapsedTime}s</Badge>
+                    <Button type="button" onClick={exitToHome} variant="outline" className={cn("ml-auto rounded-2xl", topControlButtonClass)}>Back to Home</Button>
                   </div>
 
-                  <div className="rounded-3xl bg-slate-950/70 border border-white/10 p-5 md:p-6 space-y-4">
-                    <div className="flex items-center justify-between">
-                      <h3 className="text-xl md:text-2xl font-bold">Race Track</h3>
-                      <div className="text-sm text-blue-100/70">{multiplayerState.elapsedTime}s elapsed</div>
+                  <div className="rounded-3xl bg-slate-950/92 border border-white/10 p-4 md:p-5 space-y-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <div className="text-white/70 text-xs uppercase tracking-[0.22em] mb-1">Race Track</div>
+                        <div className="text-xl font-bold text-white">Race to 30 correct answers</div>
+                      </div>
+                      <div className="rounded-2xl bg-slate-900/70 border border-white/10 px-4 py-2 text-sm text-white font-semibold">Target: {MULTIPLAYER_TARGET_SCORE}</div>
                     </div>
-                    {[{ id: "player", name: playerName?.trim() || "You", icon: "🙂", progress: multiplayerState.playerScore, isPlayer: true, burst: feedback === "correct" }, ...multiplayerState.opponents].map((runner) => {
-                      const progress = Math.min(100, (runner.progress / MULTIPLAYER_TARGET_SCORE) * 100);
-                      return (
-                        <div key={runner.id || runner.name} className="space-y-2">
-                          <div className="flex items-center justify-between text-sm">
-                            <div className="flex items-center gap-3">
-                              <span className="text-2xl">{runner.icon}</span>
-                              <span className={`font-bold ${runner.isPlayer ? "text-white" : "text-blue-100/80"}`}>{runner.name}</span>
+
+                    <div className="space-y-3">
+                      {[
+                        {
+                          id: "player",
+                          name: playerName?.trim() || "You",
+                          progress: multiplayerPlayerProgress,
+                          icon: equippedEmojiItem?.emoji || null,
+                          backgroundStyle: equippedBackgroundItem?.style,
+                          ringStyle: equippedRingItem?.style,
+                          ringOverlay: premiumRingOverlay,
+                          burst: feedback === "correct",
+                          score: multiplayerState.playerScore,
+                        },
+                        ...multiplayerState.opponents.map((opponent) => ({
+                          ...opponent,
+                          progress: Math.min(100, (Number(opponent.progress || 0) / MULTIPLAYER_TARGET_SCORE) * 100),
+                          score: Number(opponent.progress || 0),
+                        })),
+                      ].map((racer) => {
+                        const iconOffset = Math.max(2, Math.min(92, racer.progress));
+                        return (
+                          <div key={racer.id} className="grid grid-cols-[110px_minmax(0,1fr)] md:grid-cols-[140px_minmax(0,1fr)] gap-3 items-center">
+                            <div className="rounded-2xl bg-slate-900/70 border border-white/10 px-3 py-3 flex items-center justify-between gap-2 min-w-0">
+                              <div className="min-w-0">
+                                <div className="text-sm md:text-base font-black text-white truncate">{racer.name}</div>
+                                <div className="text-[10px] uppercase tracking-[0.16em] text-cyan-100/70">{racer.score}/{MULTIPLAYER_TARGET_SCORE}</div>
+                              </div>
+                              {racer.finishOrdinal && <div className="text-xs font-bold text-amber-200">#{racer.finishOrdinal}</div>}
                             </div>
-                            <span className="text-blue-100/75">{runner.progress} / {MULTIPLAYER_TARGET_SCORE}</span>
-                          </div>
-                          <div className={`relative h-10 rounded-full ${currentTheme.trackLane} border overflow-hidden`}>
-                            <div className={`absolute inset-y-0 left-0 right-0 ${currentTheme.trackStripe} bg-[length:32px_100%]`} />
-                            <div className="absolute left-3 top-1/2 -translate-y-1/2 text-[10px] uppercase tracking-[0.22em] text-white/45">Start</div>
-                            <div className={`absolute right-0 top-0 h-full w-24 bg-gradient-to-l ${currentTheme.trackFinish}`} />
-                            <motion.div className="absolute top-1/2 -translate-y-1/2 text-2xl" animate={{ left: `calc(${progress}% - 14px)` }} transition={{ type: "tween", duration: 0.35 }}>
-                              {runner.icon}
-                            </motion.div>
-                            {runner.burst && (
+
+                            <div className="relative h-14 rounded-2xl border overflow-hidden bg-slate-950/90 border-white/10">
+                              <div className="absolute inset-0 opacity-35 bg-[repeating-linear-gradient(90deg,rgba(255,255,255,0.07)_0px,rgba(255,255,255,0.07)_14px,transparent_14px,transparent_28px)]" />
+                              <div className="absolute inset-y-0 right-[2%] w-[6px] bg-[repeating-linear-gradient(180deg,#f8fafc_0px,#f8fafc_8px,#111827_8px,#111827_16px)]" />
                               <motion.div
-                                initial={{ opacity: 0, scale: 0.7 }}
-                                animate={{ opacity: [0, 1, 0], scale: [0.7, 1.15, 1.3] }}
-                                transition={{ duration: 0.45 }}
-                                className="absolute top-1/2 -translate-y-1/2 text-xs font-black text-emerald-200"
-                                style={{ left: `calc(${progress}% + 8px)` }}
+                                className={cn("absolute top-1/2 -translate-y-1/2 w-9 h-9 rounded-full border border-white/20 overflow-hidden isolate shadow-[0_8px_18px_rgba(15,23,42,0.35)]", racer.burst && "scale-110")}
+                                animate={{ left: `calc(${iconOffset}% - 18px)`, scale: racer.burst ? [1, 1.12, 1] : 1 }}
+                                transition={{ left: { duration: 0.35, ease: "easeOut" }, scale: { duration: 0.3 } }}
                               >
-                                +1
+                                {racer.ringOverlay && <div className={`absolute -inset-1 rounded-full opacity-95 ${racer.ringOverlay} blur-[1px]`} />}
+                                {racer.ringStyle && <div className={`absolute inset-0 rounded-full pointer-events-none ${racer.ringStyle}`} />}
+                                <div className="absolute inset-[3px] rounded-full flex items-center justify-center border border-white/15 overflow-hidden isolate">
+                                  <div className={getCircularBackgroundClass(racer.backgroundStyle)} />
+                                  {racer.icon ? <div className={getEmojiVisualClass(racer.icon, "text-2xl")}>{racer.icon}</div> : <UserCircle2 className="w-5 h-5 text-blue-100/85 relative z-10" />}
+                                </div>
                               </motion.div>
-                            )}
-                            <div className="absolute right-2 top-1/2 -translate-y-1/2 text-xs font-bold text-amber-100">FINISH</div>
+                            </div>
                           </div>
-                        </div>
-                      );
-                    })}
+                        );
+                      })}
+                    </div>
                   </div>
 
-                  <div className="grid md:grid-cols-4 gap-4">
-                    <Card className="bg-white/5 border-white/10 rounded-3xl md:col-span-3">
-                      <CardContent className="p-5 md:p-6 space-y-5">
-                        <div className={`rounded-3xl p-8 md:p-12 text-center transition-all duration-200 border ${feedback === "correct" ? "bg-emerald-500/20 ring-2 ring-emerald-400 border-emerald-200/30" : feedback === "incorrect" ? "bg-red-500/20 ring-2 ring-red-400 border-red-200/30" : "bg-slate-950/90 border-blue-200/20"}`}>
-                          <div className="text-sm uppercase tracking-[0.3em] text-blue-100/80 mb-4">Multiplayer Question</div>
-                          <div className="text-5xl md:text-7xl font-black text-white drop-shadow-[0_2px_10px_rgba(255,255,255,0.18)]">{currentQuestion.prompt}</div>
-                        </div>
-                        <form onSubmit={handleSubmit} className="space-y-3 max-w-xl mx-auto">
-                          <Input ref={inputRef} autoFocus value={answer} onChange={(e) => setAnswer(e.target.value)} placeholder="Type answer" className="h-20 rounded-2xl !text-[3rem] md:!text-[3.5rem] leading-none font-black tracking-tight bg-white/12 border-white/20 text-white placeholder:text-white/40 text-center" autoComplete="off" />
-                          <Button type="submit" className="w-full h-12 rounded-2xl bg-cyan-500 hover:bg-cyan-400 text-base font-bold">Submit Answer</Button>
-                        </form>
-                      </CardContent>
-                    </Card>
-                    <Card className="bg-white/5 border-white/10 rounded-3xl">
-                      <CardContent className="p-5 md:p-6 space-y-4">
-                        <div>
-                          <div className="text-sm text-blue-100/70 mb-2">Your correct answers</div>
-                          <div className="text-4xl font-black">{multiplayerState.playerScore}</div>
-                        </div>
-                        <div>
-                          <div className="text-sm text-blue-100/70 mb-2">Race target</div>
-                          <div className="text-2xl font-black">30</div>
-                        </div>
-                        <div className="rounded-2xl bg-slate-900/60 p-4 border border-white/10">
-                          <div className="text-sm text-blue-100/75">Current place</div>
-                          <div className="text-lg font-bold text-white mt-1">#{[multiplayerState.playerScore, ...multiplayerState.opponents.map((o) => o.progress)].sort((a, b) => b - a).indexOf(multiplayerState.playerScore) + 1}</div>
-                        </div>
-                        <div className="rounded-2xl bg-slate-900/60 p-4 border border-white/10">
-                          <div className="text-sm text-blue-100/75">Race reward</div>
-                          <div className="text-lg font-bold text-amber-100 mt-1">{MULTIPLAYER_PLACEMENT_COINS[[multiplayerState.playerScore, ...multiplayerState.opponents.map((o) => o.progress)].sort((a, b) => b - a).indexOf(multiplayerState.playerScore) + 1] || 5} coins</div>
-                        </div>
-                      </CardContent>
-                    </Card>
+                  <Card className="bg-white/5 border-white/10 rounded-3xl">
+                    <CardContent className="p-4 space-y-3">
+                      <div className={`rounded-3xl p-4 text-center transition-all duration-200 border ${feedback === "correct" ? "bg-emerald-500/20 ring-2 ring-emerald-400 border-emerald-200/30" : feedback === "incorrect" ? "bg-red-500/20 ring-2 ring-red-400 border-red-200/30" : "bg-slate-900/95 border-blue-200/20"}`}>
+                        <div className="text-[11px] md:text-xs uppercase tracking-[0.24em] text-blue-100/80 mb-2">Race question</div>
+                        <div className="text-2xl md:text-3xl font-black text-white leading-tight">{currentQuestion.prompt}</div>
+                      </div>
+                      <form onSubmit={handleSubmit} className="space-y-3">
+                        <Input
+                          ref={inputRef}
+                          autoFocus
+                          value={answer}
+                          onChange={(e) => setAnswer(e.target.value)}
+                          placeholder="Type answer"
+                          className="h-16 rounded-3xl !text-[2.3rem] leading-none font-black tracking-tight bg-white/12 border-white/20 text-white placeholder:text-white/40 text-center"
+                          autoComplete="off"
+                        />
+                        <Button type="submit" className="w-full h-11 rounded-2xl bg-cyan-500 hover:bg-cyan-400 text-sm md:text-base font-bold">Enter</Button>
+                      </form>
+                    </CardContent>
+                  </Card>
+
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="rounded-2xl bg-slate-900/65 border border-white/10 px-3 py-3 text-center">
+                      <div className="text-[10px] uppercase tracking-[0.16em] text-blue-100/65">Your score</div>
+                      <div className="text-xl md:text-2xl font-black text-white mt-1">{multiplayerState.playerScore}</div>
+                    </div>
+                    <div className="rounded-2xl bg-slate-900/65 border border-white/10 px-3 py-3 text-center">
+                      <div className="text-[10px] uppercase tracking-[0.16em] text-blue-100/65">Correct</div>
+                      <div className="text-xl md:text-2xl font-black text-white mt-1">{score}</div>
+                    </div>
+                    <div className="rounded-2xl bg-slate-900/65 border border-white/10 px-3 py-3 text-center">
+                      <div className="text-[10px] uppercase tracking-[0.16em] text-blue-100/65">Level</div>
+                      <div className="text-sm md:text-lg font-black text-white mt-1">{multiplayerState.selectedMode === "mixed" && multiplayerState.raceLevel && typeof multiplayerState.raceLevel === "object" ? `${multiplayerState.raceLevel.addsubLevel} + ${multiplayerState.raceLevel.muldivLevel}` : String(multiplayerState.raceLevel || "")}</div>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
-            </motion.div>
-          )}
-
-          {screen === "game" && currentQuestion && (
-            <motion.div
-              key="game"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              className="space-y-5"
-            >
-              <div className="grid md:grid-cols-4 gap-4">
-                <Card className="bg-white/10 border-white/10 rounded-3xl md:col-span-3">
-                  <CardContent className="p-5 md:p-6">
-                    <div className="flex flex-wrap items-center gap-3 mb-4">
-                      <Badge className="bg-blue-500/20 text-blue-50 border-none">{modeMeta[mode]?.title}</Badge>
-                      <Badge className="bg-purple-500/20 text-purple-50 border-none">{typeof level === "object" ? `${level.addsubLevel} + ${level.muldivLevel}` : level}</Badge>
-                      <Badge className="bg-emerald-500/20 text-emerald-50 border-none">Question {currentIndex + 1} / {QUESTIONS_PER_ROUND}</Badge>
-                      {isTestingMode && !pendingTestingExitConfirm && (
-                        <Button type="button" onClick={requestTestingExit} variant="outline" className="ml-auto rounded-2xl border-white/20 bg-white/5 text-white hover:bg-white/10">
-                          Back to Home
-                        </Button>
-                      )}
-                    </div>
-
-                    {isTestingMode && pendingTestingExitConfirm && (
-                      <div className="mb-4 rounded-3xl border border-amber-300/25 bg-amber-400/10 p-4 flex flex-wrap items-center justify-between gap-3">
-                        <div className="text-amber-100 font-semibold">Are you sure? You’re going to forfeit any coins earnt this round.</div>
-                        <div className="flex gap-2">
-                          <Button type="button" onClick={backToHome} className="rounded-2xl bg-amber-500 hover:bg-amber-400 text-white">Yes, go home</Button>
-                          <Button type="button" onClick={cancelTestingExit} variant="outline" className="rounded-2xl border-white/20 bg-white/5 text-white hover:bg-white/10">Keep playing</Button>
-                        </div>
-                      </div>
-                    )}
-
-                    <div className="mb-6 space-y-3">
-                      <div className="flex items-center justify-between text-sm text-blue-100/80">
-                        <span>Progress to level up</span>
-                        <span>{results.length} / {QUESTIONS_PER_ROUND} answered</span>
-                      </div>
-                      <div className="relative h-5 rounded-full bg-slate-900/80 border border-white/10 overflow-hidden">
-                        <div
-                          className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-blue-500 to-emerald-400 transition-all duration-300"
-                          style={{ width: `${progressValue}%` }}
-                        />
-                        <div
-                          className="absolute top-0 bottom-0 border-l-2 border-dashed border-yellow-300/90 z-10"
-                          style={{ left: `${GOAL_PROGRESS_PERCENT}%` }}
-                        />
-                        <motion.div
-                          className="absolute top-1/2 -translate-y-1/2 z-20"
-                          animate={{ left: `calc(${timerProgress}% - 10px)` }}
-                          transition={{ type: "tween", duration: 0.25 }}
-                        >
-                          <div className="w-5 h-5 rounded-full bg-white shadow-[0_0_14px_rgba(255,255,255,0.6)] border-2 border-blue-950" />
-                        </motion.div>
-                      </div>
-                      <div className="flex items-center justify-between text-xs text-blue-100/70">
-                        <div className="flex items-center gap-2">
-                          <Flag className="w-3.5 h-3.5 text-yellow-200" />
-                          <span>Goal line: 14 correct</span>
-                        </div>
-                        <span className={paceDelta >= 0 ? "text-emerald-200" : "text-amber-200"}>
-                          {paceDelta >= 0 ? "Ahead of pace" : "Behind pace"}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div
-                      className={`rounded-3xl p-8 md:p-12 text-center transition-all duration-200 border ${
-                        feedback === "correct"
-                          ? "bg-emerald-500/20 ring-2 ring-emerald-400 border-emerald-200/30"
-                          : feedback === "incorrect"
-                          ? "bg-red-500/20 ring-2 ring-red-400 border-red-200/30"
-                          : "bg-slate-950/90 border-blue-200/20"
-                      }`}
-                    >
-                      <div className="text-sm uppercase tracking-[0.3em] text-blue-100/80 mb-4">
-                        {isTestingMode ? `Testing Mode • ${testingState?.phase === "muldiv" ? "Multiplication / Division" : "Addition / Subtraction"}` : "Mental Maths Challenge"}
-                      </div>
-                      <div className="text-5xl md:text-7xl font-black text-white drop-shadow-[0_2px_10px_rgba(255,255,255,0.18)]">{currentQuestion.prompt}</div>
-                    </div>
-
-                    <form onSubmit={handleSubmit} className="mt-5 space-y-3 max-w-xl mx-auto">
-                      <Input
-                        ref={inputRef}
-                        autoFocus
-                        value={answer}
-                        onChange={(e) => setAnswer(e.target.value)}
-                        placeholder="Type answer"
-                        className="h-20 rounded-2xl !text-[3rem] md:!text-[3.5rem] leading-none font-black tracking-tight bg-white/12 border-white/20 text-white placeholder:text-white/40 text-center"
-                        autoComplete="off"
-                      />
-                      <Button type="submit" className={`w-full h-12 rounded-2xl ${currentTheme.primaryButton} text-base font-bold`}>
-                        Submit
-                      </Button>
-                    </form>
-                  </CardContent>
-                </Card>
-
-                <Card className="bg-white/10 border-white/10 rounded-3xl">
-                  <CardContent className="p-5 md:p-6 flex flex-col gap-5 h-full">
-                    <div className="flex items-center gap-3 text-xl font-bold">
-                      <TimerReset className="w-5 h-5" />
-                      {timeLeft}s
-                    </div>
-                    <div>
-                      <div className="text-sm text-blue-100/70 mb-2">Score so far</div>
-                      <div className="text-4xl font-black">{score}</div>
-                      {playerName?.trim() && <div className="text-sm text-blue-100/70 mt-2">Player: <span className="text-white font-semibold">{playerName}</span></div>}
-                    </div>
-                    <div className="rounded-2xl bg-slate-900/60 p-4 border border-white/10 space-y-2 mt-auto">
-                      <div className="text-sm text-blue-100/75">Pacing check</div>
-                      <div className={`text-lg font-bold ${paceDelta >= 0 ? "text-emerald-200" : "text-amber-200"}`}>
-                        {paceDelta >= 0 ? "You are ahead" : "You are behind"}
-                      </div>
-                      <div className="text-sm text-blue-100/70">
-                        Expected by now: {Math.max(0, Math.min(QUESTIONS_PER_ROUND, Math.round(expectedAnsweredByNow)))} questions
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
             </motion.div>
           )}
 
           {screen === "multiplayerResults" && multiplayerState && (
             <motion.div key="multiplayerResults" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
               <Card className="bg-white/10 border-white/10 rounded-3xl shadow-2xl">
-                <CardContent className="p-8 md:p-12 text-center space-y-5">
-                  <Rocket className="w-20 h-20 mx-auto text-cyan-200" />
-                  <div className="text-blue-100/70 text-sm uppercase tracking-[0.25em]">Multiplayer Race Complete</div>
-                  <h2 className="text-4xl md:text-5xl font-black text-white drop-shadow-[0_3px_16px_rgba(255,255,255,0.22)]">
-                    {multiplayerState.placement === "win" ? "You Won!" : `${multiplayerState.winner} won the race`}
-                  </h2>
-                  <p className="text-blue-100/80 max-w-2xl mx-auto">The race finished the moment you crossed the line. Race Mode rewards placing only: 1st earns 30 coins, 2nd earns 20, 3rd earns 10, and 4th earns 5.</p>
-                  <div className="flex justify-center gap-3 flex-wrap">
-                    <Badge className="bg-amber-400/20 text-amber-50 border-none text-base px-4 py-2">Coins earned: +{multiplayerState.playerCoinsEarned || 0}</Badge>
-                    <Badge className="bg-emerald-400/20 text-emerald-50 border-none text-base px-4 py-2">Place #{multiplayerState.placementNumber}</Badge>
+                <CardContent className="p-8 md:p-12 text-center space-y-6">
+                  <div className="flex justify-center">
+                    <div className={`w-24 h-24 rounded-full flex items-center justify-center border-2 ${multiplayerState.placementNumber === 1 ? "bg-emerald-500/15 border-emerald-300/40" : "bg-amber-500/15 border-amber-300/40"}`}>
+                      {multiplayerState.placementNumber === 1 ? <Trophy className="w-12 h-12 text-emerald-200" /> : <Flag className="w-12 h-12 text-amber-200" />}
+                    </div>
                   </div>
+
+                  <div className="space-y-2">
+                    <div className="text-sm uppercase tracking-[0.22em] text-blue-100/70">Race Track</div>
+                    <h2 className="text-3xl md:text-5xl font-black text-white">{multiplayerState.placementNumber === 1 ? "You won the race" : `You finished ${multiplayerState.placementNumber}${multiplayerState.placementNumber === 1 ? "st" : multiplayerState.placementNumber === 2 ? "nd" : multiplayerState.placementNumber === 3 ? "rd" : "th"}`}</h2>
+                    <p className="text-blue-100/80 max-w-2xl mx-auto">Winner: {multiplayerState.winner || "Unknown"}. Placement bonus earned: {multiplayerState.playerCoinsEarned || 0} coins.</p>
+                  </div>
+
                   <div className="grid md:grid-cols-4 gap-4 max-w-4xl mx-auto text-left">
-                    {[{ id: "you", name: playerName?.trim() || "You", icon: "🙂", progress: multiplayerState.playerScore }, ...multiplayerState.opponents].sort((a, b) => b.progress - a.progress).map((runner, index) => (
-                      <div key={runner.id} className="rounded-3xl bg-slate-900/60 border border-white/10 p-4">
-                        <div className="text-sm text-blue-100/60 mb-2">Place #{index + 1}</div>
-                        <div className="text-3xl mb-2">{runner.icon}</div>
-                        <div className="font-bold text-white">{runner.name}</div>
-                        <div className="text-blue-100/75 mt-1">{runner.progress} correct</div>
-                      </div>
-                    ))}
+                    <div className="rounded-3xl bg-slate-900/60 border border-white/10 p-5">
+                      <div className="text-sm text-blue-100/70 mb-2">Placement</div>
+                      <div className="text-4xl font-black text-white">#{multiplayerState.placementNumber || 4}</div>
+                    </div>
+                    <div className="rounded-3xl bg-slate-900/60 border border-white/10 p-5">
+                      <div className="text-sm text-blue-100/70 mb-2">Time</div>
+                      <div className="text-4xl font-black text-white">{multiplayerState.elapsedTime || 0}s</div>
+                    </div>
+                    <div className="rounded-3xl bg-slate-900/60 border border-white/10 p-5">
+                      <div className="text-sm text-blue-100/70 mb-2">Correct</div>
+                      <div className="text-4xl font-black text-white">{multiplayerState.playerScore || 0}</div>
+                    </div>
+                    <div className="rounded-3xl bg-slate-900/60 border border-white/10 p-5">
+                      <div className="text-sm text-blue-100/70 mb-2">Coins</div>
+                      <div className="text-4xl font-black text-white">+{multiplayerState.playerCoinsEarned || 0}</div>
+                    </div>
                   </div>
-                  <div className="flex justify-center gap-3">
-                    <Button onClick={() => setScreen("multiplayerSelect")} className="rounded-2xl h-12 px-6 bg-cyan-500 hover:bg-cyan-400 text-white font-bold">Play Again</Button>
-                    <Button onClick={backToHome} variant="outline" className="rounded-2xl h-12 px-6 border-white/20 bg-white/5 text-white hover:bg-white/10">Home</Button>
+
+                  <div className="flex justify-center gap-3 flex-wrap">
+                    <Button onClick={() => startMultiplayerLobby(multiplayerState.selectedMode)} className={`rounded-2xl h-12 px-6 ${actionButtonClass} text-white font-bold`}>
+                      Race Again
+                    </Button>
+                    <Button onClick={backToHome} variant="outline" className="rounded-2xl h-12 px-6 border-white/20 bg-white/5 text-white hover:bg-white/10 font-bold">
+                      Go Home
+                    </Button>
                   </div>
                 </CardContent>
               </Card>
             </motion.div>
           )}
 
-          {screen === "results" && (
-            <motion.div
-              key="results"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              className="space-y-5"
-            >
-              <Card className="bg-white/10 border-white/10 rounded-3xl shadow-2xl overflow-hidden">
-                <CardContent className="p-6 md:p-8">
+          {screen === "levels" && (
+            <motion.div key="levels" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+              <Card className="bg-white/10 border-white/10 rounded-3xl shadow-2xl">
+                <CardContent className="p-6 md:p-8 space-y-6">
                   <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                     <div>
-                      <div className="text-blue-100/70 text-sm mb-2">Round Complete</div>
-                      <h2 className="text-3xl md:text-4xl font-black">{modeMeta[mode]?.title} • {typeof level === "object" ? `${level.addsubLevel} + ${level.muldivLevel}` : level}</h2>
-                      <p className="text-blue-100/80 mt-2">{playerName?.trim() ? `${playerName}, you answered ${score} out of ${results.length} correctly.` : `You answered ${score} out of ${results.length} correctly.`}</p>
+                      <h2 className="text-2xl md:text-3xl font-bold text-white">Choose your level</h2>
+                      <p className="text-blue-100/80 mt-2">{modeMeta[mode]?.title || "Practice mode"}</p>
                     </div>
-                    <div className={`rounded-3xl px-6 py-5 ${passed ? "bg-emerald-500/20" : "bg-amber-500/20"}`}>
-                      <div className="text-sm uppercase tracking-[0.25em] text-white/70">Result</div>
-                      <div className="text-3xl font-black mt-1">{passed ? "LEVEL UP" : "Keep Practising"}</div>
+                    <Button variant="outline" onClick={backToHome} className="rounded-2xl border-white/20 bg-white/5 text-white hover:bg-white/10">Back</Button>
+                  </div>
+
+                  {sessionType === "practice" && (
+                    <div className="rounded-3xl bg-slate-900/60 border border-white/10 p-4 space-y-3">
+                      <div className="flex items-center justify-between gap-3 flex-wrap">
+                        <div>
+                          <div className="text-white/70 text-xs uppercase tracking-[0.22em] mb-1">Round size</div>
+                          <div className="text-lg font-bold text-white">Choose question amount</div>
+                        </div>
+                        <div className="text-xs font-semibold text-amber-200">Current level = 2x coins • 100 questions = up to 3x coins</div>
+                      </div>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        {Object.entries(PRACTISE_ROUND_OPTIONS).map(([count, config]) => (
+                          <Button
+                            key={count}
+                            type="button"
+                            onClick={() => setPractiseQuestionCount(Number(count))}
+                            className={cn(
+                              "h-auto rounded-3xl border p-4 text-left flex flex-col items-start gap-2",
+                              practiseQuestionCount === Number(count) ? `${actionButtonClass} text-white` : "bg-white/5 border-white/10 text-white hover:bg-white/10"
+                            )}
+                          >
+                            <div className="text-xl font-black">{count}</div>
+                            <div className="text-xs text-white/75">{config.timeLimit}s</div>
+                            <div className={`text-xs font-semibold ${Number(count) === 100 ? "text-amber-200" : "text-emerald-200"}`}>{Number(count) === 100 ? "Up to 3x coins" : "Normal coins"}</div>
+                          </Button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {mode !== "mixed" ? (
+                    <div className="grid sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                      {(progressionOrder[mode] || []).map((lvl) => {
+                        const isCurrentSavedLevel = (mode === "addsub" && lvl === userHistory.addsubLevel) || (mode === "muldiv" && lvl === userHistory.muldivLevel);
+                        return (
+                          <Button
+                            key={lvl}
+                            type="button"
+                            onClick={() => startLevel(lvl)}
+                            className={cn(
+                              "h-auto rounded-3xl border p-4 text-left flex flex-col items-start gap-2",
+                              isCurrentSavedLevel
+                                ? "bg-emerald-500/12 border-emerald-300/35 hover:bg-emerald-500/18"
+                                : "bg-white/5 border-white/10 hover:bg-white/10"
+                            )}
+                          >
+                            <div className="flex w-full items-start justify-between gap-2">
+                              <Badge className={`${accentPillClass} border-none`}>{mode === "addsub" ? "AdS" : "MuS"}</Badge>
+                              {isCurrentSavedLevel && <Badge className="bg-emerald-400/20 text-emerald-50 border-none">2x coins</Badge>}
+                            </div>
+                            <div className="text-2xl font-black text-white">{lvl}</div>
+                            <div className="text-xs text-white/70">{isCurrentSavedLevel ? "Current saved level" : "Start this level"}</div>
+                          </Button>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="grid lg:grid-cols-2 gap-5">
+                      <div className="rounded-3xl bg-slate-900/60 border border-white/10 p-4 space-y-3">
+                        <div className="text-lg font-bold text-white">Choose AdS level</div>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                          {progressionOrder.addsub.map((lvl) => {
+                            const isCurrentSavedLevel = lvl === userHistory.addsubLevel;
+                            return (
+                              <Button
+                                key={lvl}
+                                type="button"
+                                onClick={() => startMixedLevelSelection("addsubLevel", lvl)}
+                                className={cn(
+                                  "rounded-2xl h-auto min-h-[44px] border px-3 py-2 flex flex-col items-center justify-center gap-0.5",
+                                  mixedSelection.addsubLevel === lvl ? `${actionButtonClass} text-white` : isCurrentSavedLevel ? "bg-emerald-500/12 border-emerald-300/35 text-white hover:bg-emerald-500/18" : "bg-white/5 border-white/10 text-white hover:bg-white/10"
+                                )}
+                              >
+                                <span className="font-bold">{lvl}</span>
+                                {isCurrentSavedLevel && <span className="text-[10px] font-semibold text-emerald-200">2x coins</span>}
+                              </Button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                      <div className="rounded-3xl bg-slate-900/60 border border-white/10 p-4 space-y-3">
+                        <div className="text-lg font-bold text-white">Choose MuS level</div>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                          {progressionOrder.muldiv.map((lvl) => {
+                            const isCurrentSavedLevel = lvl === userHistory.muldivLevel;
+                            return (
+                              <Button
+                                key={lvl}
+                                type="button"
+                                onClick={() => startMixedLevelSelection("muldivLevel", lvl)}
+                                className={cn(
+                                  "rounded-2xl h-auto min-h-[44px] border px-3 py-2 flex flex-col items-center justify-center gap-0.5",
+                                  mixedSelection.muldivLevel === lvl ? `${actionButtonClass} text-white` : isCurrentSavedLevel ? "bg-emerald-500/12 border-emerald-300/35 text-white hover:bg-emerald-500/18" : "bg-white/5 border-white/10 text-white hover:bg-white/10"
+                                )}
+                              >
+                                <span className="font-bold">{lvl}</span>
+                                {isCurrentSavedLevel && <span className="text-[10px] font-semibold text-emerald-200">2x coins</span>}
+                              </Button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                      <div className="lg:col-span-2 flex justify-center">
+                        <Button
+                          type="button"
+                          disabled={!mixedSelection.addsubLevel || !mixedSelection.muldivLevel}
+                          onClick={() => startLevel({ addsubLevel: mixedSelection.addsubLevel, muldivLevel: mixedSelection.muldivLevel })}
+                          className={`rounded-2xl h-12 px-6 ${actionButtonClass} text-white font-bold disabled:bg-slate-700 disabled:text-slate-300`}
+                        >
+                          Start Mixed Level
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </motion.div>
+          )}
+
+          {screen === "game" && currentQuestion && (
+            <motion.div key="game" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-3">
+              <Card className="bg-white/10 border-white/10 rounded-3xl shadow-2xl overflow-hidden">
+                <CardContent className="p-4 md:p-5 space-y-4">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge className={`${accentPillClass} border-none`}>{isTestingMode ? "Testing" : isTimeTrialMode ? "Time Trial" : "Practice"}</Badge>
+                    <Badge className="bg-white/10 text-white border-none">{isTestingMode ? (testingState?.phase === "muldiv" ? "MuS" : "AdS") : modeMeta[mode]?.title || "Mode"}</Badge>
+                    <Badge className="bg-white/10 text-white border-none">{mode === "mixed" && level && typeof level === "object" ? `${level.addsubLevel} + ${level.muldivLevel}` : String(level || "")}</Badge>
+                    <Button type="button" onClick={isTestingMode ? exitToHome : backToHome} variant="outline" className={cn("ml-auto rounded-2xl", topControlButtonClass)}>
+                      Back to Home
+                    </Button>
+                  </div>
+
+                  {isTimeTrialMode ? (
+                    <div className="space-y-3">
+                      <div className="grid xl:grid-cols-[minmax(0,1fr)_320px] gap-3 items-start">
+                        <div className="rounded-3xl bg-slate-950/92 border border-white/10 p-4 md:p-5">
+                          <TimeTrialStopwatch prompt={currentQuestion.prompt} timeLeft={timeLeft} totalTime={TIME_TRIAL_SECONDS} feedback={feedback} countdownLabel={timeTrialCountdownLabel} />
+                        </div>
+                        <Card className="bg-white/5 border-white/10 rounded-3xl">
+                          <CardContent className="p-3 md:p-4 h-full flex flex-col justify-center">
+                            <form onSubmit={handleSubmit} className="space-y-3">
+                              <Input
+                                ref={inputRef}
+                                autoFocus
+                                value={answer}
+                                onChange={(e) => setAnswer(e.target.value)}
+                                placeholder="Type answer"
+                                className="h-16 rounded-3xl !text-[2.1rem] md:!text-[2.4rem] leading-none font-black tracking-tight bg-white/12 border-white/20 text-white placeholder:text-white/40 text-center"
+                                autoComplete="off"
+                                disabled={isTimeTrialInteractionLocked}
+                              />
+                              <Button type="submit" disabled={isTimeTrialInteractionLocked} className="w-full h-11 rounded-2xl bg-cyan-500 hover:bg-cyan-400 text-base font-bold disabled:bg-slate-700 disabled:text-slate-300">Enter</Button>
+                            </form>
+                          </CardContent>
+                        </Card>
+                      </div>
+                      <Card className="bg-white/5 border-white/10 rounded-3xl">
+                        <CardContent className="p-3">
+                          <div className="grid grid-cols-3 gap-2 text-center">
+                            <div className="rounded-2xl bg-slate-900/65 border border-white/10 px-3 py-2">
+                              <div className="text-[10px] uppercase tracking-[0.16em] text-blue-100/65">Correct</div>
+                              <div className="text-xl md:text-2xl font-black text-white mt-1">{score}</div>
+                            </div>
+                            <div className="rounded-2xl bg-slate-900/65 border border-white/10 px-3 py-2">
+                              <div className="text-[10px] uppercase tracking-[0.16em] text-blue-100/65">Answered</div>
+                              <div className="text-xl md:text-2xl font-black text-white mt-1">{results.length}</div>
+                            </div>
+                            <div className="rounded-2xl bg-slate-900/65 border border-white/10 px-3 py-2">
+                              <div className="text-[10px] uppercase tracking-[0.16em] text-blue-100/65">Level</div>
+                              <div className="text-lg md:text-xl font-black text-white mt-1 break-words">{mode === "mixed" && level && typeof level === "object" ? `${level.addsubLevel} + ${level.muldivLevel}` : String(level || "")}</div>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </div>
+                  ) : (
+                    <div className="grid xl:grid-cols-[minmax(0,1fr)_240px] gap-3 items-start">
+                      <div className="space-y-3 min-w-0">
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
+                          <div className="rounded-2xl bg-slate-900/65 border border-white/10 px-3.5 py-3">
+                            <div className="text-[10px] uppercase tracking-[0.16em] text-blue-100/65">Correct</div>
+                            <div className="text-2xl md:text-3xl font-black text-white mt-1">{score}</div>
+                          </div>
+                          <div className="rounded-2xl bg-slate-900/65 border border-white/10 px-3.5 py-3">
+                            <div className="text-[10px] uppercase tracking-[0.16em] text-blue-100/65">Question</div>
+                            <div className="text-2xl md:text-3xl font-black text-white mt-1">{currentIndex + 1}/{roundQuestionCount}</div>
+                          </div>
+                          <div className="rounded-2xl bg-slate-900/65 border border-white/10 px-3.5 py-3">
+                            <div className="text-[10px] uppercase tracking-[0.16em] text-blue-100/65">Time</div>
+                            <div className="text-2xl md:text-3xl font-black text-white mt-1">{timeLeft}s</div>
+                          </div>
+                          <div className="rounded-2xl bg-slate-900/65 border border-white/10 px-3.5 py-3">
+                            <div className="text-[10px] uppercase tracking-[0.16em] text-blue-100/65">Target</div>
+                            <div className="text-2xl md:text-3xl font-black text-white mt-1">{currentPassScore}</div>
+                          </div>
+                        </div>
+
+                        <div className="rounded-3xl bg-slate-950/92 border border-white/10 p-4 md:p-5 space-y-3">
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between text-sm text-blue-100/80">
+                              <span>Round progress</span>
+                              <span>{results.length}/{roundQuestionCount} answered • Goal {currentPassScore}</span>
+                            </div>
+                            <div className="relative h-3.5 rounded-full bg-slate-800 border border-white/10 overflow-hidden">
+                              <div className="absolute inset-y-0 left-0 bg-white/10" style={{ width: `${GOAL_PROGRESS_PERCENT}%` }} />
+                              <div className="absolute inset-y-0 w-[3px] bg-amber-300 shadow-[0_0_10px_rgba(252,211,77,0.4)]" style={{ left: `calc(${GOAL_PROGRESS_PERCENT}% - 1.5px)` }} />
+                              <motion.div className="absolute inset-y-0 left-0 bg-emerald-400" animate={{ width: `${progressValue}%` }} transition={{ duration: 0.2 }} />
+                            </div>
+                          </div>
+
+                          <div className={`rounded-3xl p-4 md:p-5 text-center transition-all duration-200 border ${feedback === "correct" ? "bg-emerald-500/20 ring-2 ring-emerald-400 border-emerald-200/30" : feedback === "incorrect" ? "bg-red-500/20 ring-2 ring-red-400 border-red-200/30" : "bg-slate-900/95 border-blue-200/20"}`}>
+                            <div className="text-[11px] md:text-xs uppercase tracking-[0.24em] text-blue-100/80 mb-2">
+                              {isTestingMode ? (testingState?.phase === "muldiv" ? "MuS" : "AdS") : (mode === "muldiv" ? "MuS" : mode === "mixed" ? "Mixed" : "AdS")}
+                            </div>
+                            <div className="text-2xl md:text-4xl font-black text-white leading-tight text-center">{currentQuestion.prompt}</div>
+                          </div>
+
+                          <form onSubmit={handleSubmit} className="space-y-3">
+                            <Input
+                              ref={inputRef}
+                              autoFocus
+                              value={answer}
+                              onChange={(e) => setAnswer(e.target.value)}
+                              placeholder="Type answer"
+                              className="h-16 md:h-18 rounded-3xl !text-[2.2rem] md:!text-[2.6rem] leading-none font-black tracking-tight bg-white/12 border-white/20 text-white placeholder:text-white/40 text-center"
+                              autoComplete="off"
+                            />
+                            <Button type="submit" className="w-full h-11 rounded-2xl bg-cyan-500 hover:bg-cyan-400 text-sm md:text-base font-bold">Enter</Button>
+                          </form>
+                        </div>
+                      </div>
+
+                      <div className="space-y-3">
+                        <Card className="bg-white/5 border-white/10 rounded-3xl">
+                          <CardContent className="p-4 space-y-3">
+                            <div className="rounded-2xl bg-slate-900/65 border border-white/10 px-4 py-3">
+                              <div className="text-[10px] uppercase tracking-[0.16em] text-blue-100/65">Level</div>
+                              <div className="text-xl md:text-2xl font-black text-white mt-1">{mode === "mixed" && level && typeof level === "object" ? `${level.addsubLevel} + ${level.muldivLevel}` : String(level || "")}</div>
+                            </div>
+                            <div className="rounded-2xl bg-slate-900/65 border border-white/10 px-4 py-3">
+                              <div className="text-[10px] uppercase tracking-[0.16em] text-blue-100/65">Answered</div>
+                              <div className="text-2xl font-black text-white mt-1">{results.length}</div>
+                            </div>
+                            <div className="rounded-2xl bg-slate-900/65 border border-white/10 px-4 py-3">
+                              <div className="text-[10px] uppercase tracking-[0.16em] text-blue-100/65">Remaining</div>
+                              <div className="text-2xl font-black text-white mt-1">{Math.max(0, roundQuestionCount - results.length)}</div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </div>
+                    </div>
+                  )}
+
+                  {isTestingMode && pendingTestingExitConfirm && (
+                    <div className="rounded-3xl bg-amber-400/10 border border-amber-300/20 p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                      <div className="text-amber-100">Leave now? Your testing result for this round will not save.</div>
+                      <div className="flex gap-2">
+                        <Button type="button" onClick={exitToHome} className="rounded-2xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-4">Leave</Button>
+                        <Button type="button" onClick={cancelTestingExit} variant="outline" className="rounded-2xl border-white/20 bg-white/5 text-white hover:bg-white/10 px-4">Stay</Button>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </motion.div>
+          )}
+
+          {screen === "results" && (
+            <motion.div key="results" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+              <Card className="bg-white/10 border-white/10 rounded-3xl shadow-2xl">
+                <CardContent className="p-8 md:p-12 text-center space-y-6">
+                  <div className="flex justify-center">
+                    <div className={`w-24 h-24 rounded-full flex items-center justify-center border-2 ${passed ? "bg-emerald-500/15 border-emerald-300/40" : "bg-amber-500/15 border-amber-300/40"}`}>
+                      {passed ? <CheckCircle2 className="w-12 h-12 text-emerald-200" /> : <TimerReset className="w-12 h-12 text-amber-200" />}
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="text-sm uppercase tracking-[0.22em] text-blue-100/70">Round complete</div>
+                    <h2 className="text-3xl md:text-5xl font-black text-white">{passed ? "Nice work" : "Keep practising"}</h2>
+                    <p className="text-blue-100/80 max-w-2xl mx-auto">You answered {score} out of {roundQuestionCount} correctly.</p>
+                  </div>
+
+                  <div className="grid md:grid-cols-4 gap-4 max-w-4xl mx-auto text-left">
+                    <div className="rounded-3xl bg-slate-900/60 border border-white/10 p-5"><div className="text-sm text-blue-100/70 mb-2">Correct</div><div className="text-4xl font-black text-white">{score}</div></div>
+                    <div className="rounded-3xl bg-slate-900/60 border border-white/10 p-5"><div className="text-sm text-blue-100/70 mb-2">Goal</div><div className="text-4xl font-black text-white">{currentPassScore}</div></div>
+                    <div className="rounded-3xl bg-slate-900/60 border border-white/10 p-5"><div className="text-sm text-blue-100/70 mb-2">Level</div><div className="text-2xl font-black text-white">{mode === "mixed" && level && typeof level === "object" ? `${level.addsubLevel} + ${level.muldivLevel}` : String(level || "")}</div></div>
+                    <div className="rounded-3xl bg-slate-900/60 border border-white/10 p-5"><div className="text-sm text-blue-100/70 mb-2">Coins</div><div className="text-4xl font-black text-white">+{roundReward?.totalCoins || 0}</div></div>
+                  </div>
+
+                  <div className="max-w-3xl mx-auto text-left rounded-3xl bg-slate-900/60 border border-white/10 p-5 space-y-4">
+                    <h3 className="text-xl font-bold text-white">Incorrect answers</h3>
+                    {incorrectItems.length > 0 ? (
+                      <div className="space-y-3 max-h-[360px] overflow-auto pr-1">
+                        {incorrectItems.map((item, index) => (
+                          <div key={`${item.prompt}-${index}`} className="rounded-2xl bg-slate-950/70 border border-white/10 p-4 space-y-1">
+                            <div className="text-white font-semibold">{item.prompt}</div>
+                            <div className="text-sm text-red-200">Your answer: {item.given || "No answer"}</div>
+                            <div className="text-sm text-emerald-200">Correct answer: {item.expected}</div>
+                            <div className="text-sm text-blue-100/80">{item.strategy}</div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="rounded-2xl bg-slate-950/70 border border-white/10 p-4 text-emerald-200 font-semibold">No incorrect answers this round.</div>
+                    )}
+                  </div>
+
+                  <div className="flex justify-center gap-3 flex-wrap">
+                    <Button onClick={restartSameLevel} className={`rounded-2xl h-12 px-6 ${actionButtonClass} text-white font-bold`}>Play Again</Button>
+                    {next && mode !== "mixed" && <Button onClick={nextLevel} className={`rounded-2xl h-12 px-6 ${actionButtonClass} text-white font-bold`}>Next Level</Button>}
+                    <Button onClick={backToHome} variant="outline" className="rounded-2xl h-12 px-6 border-white/20 bg-white/5 text-white hover:bg-white/10 font-bold">Go Home</Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          )}
+
+          {screen === "timeTrialSelect" && (
+            <motion.div key="timeTrialSelect" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+              <Card className="bg-white/10 border-white/10 rounded-3xl shadow-2xl">
+                <CardContent className="p-6 md:p-8 space-y-6">
+                  <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                    <div>
+                      <h2 className="text-2xl md:text-3xl font-bold">Choose a Time Trial</h2>
+                      <p className="text-blue-100/80 mt-2">One minute against the clock using your saved level.</p>
+                    </div>
+                    <Button variant="outline" onClick={backToHome} className="rounded-2xl border-white/20 bg-white/5 text-white hover:bg-white/10">Back</Button>
+                  </div>
+                  <div className="grid md:grid-cols-3 gap-4">
+                    {[
+                      { key: "addsub", title: "Addition / Subtraction", detail: `Uses ${testingScores.addsubScore !== null ? userHistory.addsubLevel : "_____"}`, unlocked: hasAddSubPlacement },
+                      { key: "muldiv", title: "Multiplication / Division", detail: `Uses ${testingScores.muldivScore !== null ? userHistory.muldivLevel : "_____"}`, unlocked: hasMulDivPlacement },
+                      { key: "mixed", title: "Mixed", detail: hasMixedPlacement ? `Uses ${userHistory.addsubLevel} + ${userHistory.muldivLevel}` : "Requires both saved test strands", unlocked: hasMixedPlacement },
+                    ].map((item) => (
+                      <Card key={item.key} className={`bg-slate-900/60 border-white/10 rounded-3xl ${!item.unlocked ? "opacity-55" : ""}`}>
+                        <CardContent className="p-5 space-y-4">
+                          <div className="flex items-center gap-3"><Rocket className="w-6 h-6 text-cyan-100" /><h3 className="text-xl font-bold text-white">{item.title}</h3></div>
+                          <p className="text-blue-100/75">{item.detail}</p>
+                          <Button onClick={() => startTimeTrialMode(item.key)} disabled={!item.unlocked} className="w-full rounded-2xl bg-cyan-500 hover:bg-cyan-400 text-white disabled:bg-slate-700 disabled:text-slate-300">Start Time Trial</Button>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          )}
+
+          {screen === "timeTrialResults" && timeTrialState && (
+            <motion.div key="timeTrialResults" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+              <Card className="bg-white/10 border-white/10 rounded-3xl shadow-2xl">
+                <CardContent className="p-8 md:p-12 text-center space-y-6">
+                  <Trophy className="w-20 h-20 mx-auto text-cyan-200" />
+                  <div className="space-y-2">
+                    <div className="text-sm uppercase tracking-[0.22em] text-blue-100/70">Time Trial complete</div>
+                    <h2 className="text-3xl md:text-5xl font-black text-white">You scored {score}</h2>
+                    <p className="text-blue-100/80 max-w-2xl mx-auto">Your result has been saved to the leaderboards.</p>
+                  </div>
+                  <div className="grid md:grid-cols-4 gap-4 max-w-4xl mx-auto text-left">
+                    <div className="rounded-3xl bg-slate-900/60 border border-white/10 p-5"><div className="text-sm text-blue-100/70 mb-2">Correct</div><div className="text-4xl font-black text-white">{score}</div></div>
+                    <div className="rounded-3xl bg-slate-900/60 border border-white/10 p-5"><div className="text-sm text-blue-100/70 mb-2">Answered</div><div className="text-4xl font-black text-white">{results.length}</div></div>
+                    <div className="rounded-3xl bg-slate-900/60 border border-white/10 p-5"><div className="text-sm text-blue-100/70 mb-2">Level</div><div className="text-2xl font-black text-white">{timeTrialState.levelLabel}</div></div>
+                    <div className="rounded-3xl bg-slate-900/60 border border-white/10 p-5"><div className="text-sm text-blue-100/70 mb-2">Coins</div><div className="text-4xl font-black text-white">+{roundReward?.totalCoins || 0}</div></div>
+                  </div>
+
+                  <div className="grid lg:grid-cols-2 gap-4 max-w-5xl mx-auto text-left">
+                    <div className="rounded-3xl bg-slate-900/60 border border-white/10 p-5 space-y-3">
+                      <h3 className="text-xl font-bold text-white">All levels leaderboard</h3>
+                      {timeTrialLeaderboards.overall.length > 0 ? timeTrialLeaderboards.overall.map((entry, index) => (
+                        <div key={`overall-${entry.ts}-${index}`} className="rounded-2xl bg-slate-950/70 border border-white/10 px-4 py-3 flex items-center justify-between gap-3">
+                          <div>
+                            <div className="text-white font-semibold">#{index + 1} • {entry.correctAnswers} correct</div>
+                            <div className="text-xs text-white/65">{entry.levelLabel} • {formatTimeTrialTimestamp(entry.ts)}</div>
+                          </div>
+                        </div>
+                      )) : <div className="rounded-2xl bg-slate-950/70 border border-white/10 p-4 text-white/70">No scores yet.</div>}
+                    </div>
+                    <div className="rounded-3xl bg-slate-900/60 border border-white/10 p-5 space-y-3">
+                      <h3 className="text-xl font-bold text-white">This level leaderboard</h3>
+                      {timeTrialLeaderboards.byLevel.length > 0 ? timeTrialLeaderboards.byLevel.map((entry, index) => (
+                        <div key={`level-${entry.ts}-${index}`} className="rounded-2xl bg-slate-950/70 border border-white/10 px-4 py-3 flex items-center justify-between gap-3">
+                          <div>
+                            <div className="text-white font-semibold">#{index + 1} • {entry.correctAnswers} correct</div>
+                            <div className="text-xs text-white/65">{entry.levelLabel} • {formatTimeTrialTimestamp(entry.ts)}</div>
+                          </div>
+                        </div>
+                      )) : <div className="rounded-2xl bg-slate-950/70 border border-white/10 p-4 text-white/70">No scores yet for this level.</div>}
+                    </div>
+                  </div>
+
+                  <div className="max-w-3xl mx-auto text-left rounded-3xl bg-slate-900/60 border border-white/10 p-5 space-y-4">
+                    <h3 className="text-xl font-bold text-white">Incorrect answers</h3>
+                    {incorrectItems.length > 0 ? incorrectItems.map((item, index) => (
+                      <div key={`${item.prompt}-${index}`} className="rounded-2xl bg-slate-950/70 border border-white/10 p-4 space-y-1">
+                        <div className="text-white font-semibold">{item.prompt}</div>
+                        <div className="text-sm text-red-200">Your answer: {item.given || "No answer"}</div>
+                        <div className="text-sm text-emerald-200">Correct answer: {item.expected}</div>
+                      </div>
+                    )) : <div className="rounded-2xl bg-slate-950/70 border border-white/10 p-4 text-emerald-200 font-semibold">No incorrect answers this round.</div>}
+                  </div>
+
+                  <div className="flex justify-center gap-3 flex-wrap">
+                    <Button onClick={() => startTimeTrialMode(timeTrialState.selectedMode)} className={`rounded-2xl h-12 px-6 ${actionButtonClass} text-white font-bold`}>Play Again</Button>
+                    <Button onClick={backToHome} variant="outline" className="rounded-2xl h-12 px-6 border-white/20 bg-white/5 text-white hover:bg-white/10 font-bold">Go Home</Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          )}
+
+          {screen === "kingSelect" && (
+            <motion.div key="kingSelect" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+              <Card className="bg-white/10 border-white/10 rounded-3xl shadow-2xl">
+                <CardContent className="p-6 md:p-8 space-y-6">
+                  <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                    <div>
+                      <h2 className="text-2xl md:text-3xl font-bold">King of the Hill</h2>
+                      <p className="text-blue-100/80 mt-2">Survive 15-question rounds as the time per question drops each round.</p>
+                    </div>
+                    <Button variant="outline" onClick={backToHome} className="rounded-2xl border-white/20 bg-white/5 text-white hover:bg-white/10">Back</Button>
+                  </div>
+                  <div className="grid md:grid-cols-3 gap-4">
+                    {[
+                      { key: "addsub", title: "Addition / Subtraction", detail: `Uses ${testingScores.addsubScore !== null ? userHistory.addsubLevel : "_____"}`, unlocked: hasAddSubPlacement },
+                      { key: "muldiv", title: "Multiplication / Division", detail: `Uses ${testingScores.muldivScore !== null ? userHistory.muldivLevel : "_____"}`, unlocked: hasMulDivPlacement },
+                      { key: "mixed", title: "Mixed", detail: hasMixedPlacement ? `Uses ${userHistory.addsubLevel} + ${userHistory.muldivLevel}` : "Requires both saved test strands", unlocked: hasMixedPlacement },
+                    ].map((item) => (
+                      <Card key={item.key} className={`bg-slate-900/60 border-white/10 rounded-3xl ${!item.unlocked ? "opacity-55" : ""}`}>
+                        <CardContent className="p-5 space-y-4">
+                          <div className="flex items-center gap-3"><Trophy className="w-6 h-6 text-cyan-100" /><h3 className="text-xl font-bold text-white">{item.title}</h3></div>
+                          <p className="text-blue-100/75">{item.detail}</p>
+                          <Button onClick={() => startKingMode(item.key)} disabled={!item.unlocked} className="w-full rounded-2xl bg-cyan-500 hover:bg-cyan-400 text-white disabled:bg-slate-700 disabled:text-slate-300">Start</Button>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          )}
+
+          {screen === "kingIntro" && kingState && (
+            <motion.div key="kingIntro" initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}>
+              <Card className="bg-white/10 border-white/10 rounded-3xl shadow-2xl">
+                <CardContent className="p-8 md:p-12 text-center space-y-6">
+                  <div className="text-sm uppercase tracking-[0.22em] text-blue-100/70">New challenger</div>
+                  <div className="flex justify-center items-center gap-6">
+                    <div className="relative w-24 h-24">
+                      {premiumRingOverlay && <div className={`absolute -inset-1 rounded-full opacity-95 ${premiumRingOverlay} blur-[1px]`} />}
+                      {equippedRingItem?.style && <div className={`absolute inset-0 rounded-full pointer-events-none ${equippedRingItem.style}`} />}
+                      <div className="absolute inset-[6px] rounded-full flex items-center justify-center border border-white/15 overflow-hidden isolate"><div className={getCircularBackgroundClass(equippedBackgroundItem?.style)} />{equippedEmojiItem ? <div className={getEmojiVisualClass(equippedEmojiItem.emoji, "text-5xl")}>{equippedEmojiItem.emoji}</div> : <UserCircle2 className="w-10 h-10 text-blue-100/85" />}</div>
+                    </div>
+                    <div className="text-4xl md:text-5xl font-black text-white">VS</div>
+                    <div className="relative w-24 h-24">
+                      {kingState.challenger?.ringOverlay && <div className={`absolute -inset-1 rounded-full opacity-95 ${kingState.challenger.ringOverlay} blur-[1px]`} />}
+                      {kingState.challenger?.ringStyle && <div className={`absolute inset-0 rounded-full pointer-events-none ${kingState.challenger.ringStyle}`} />}
+                      <div className="absolute inset-[6px] rounded-full flex items-center justify-center border border-white/15 overflow-hidden isolate"><div className={getCircularBackgroundClass(kingState.challenger?.backgroundStyle)} /> <div className={getEmojiVisualClass(kingState.challenger?.icon, "text-5xl")}>{kingState.challenger?.icon}</div></div>
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-3xl md:text-5xl font-black text-white">{kingState.challenger?.name}</div>
+                    <div className="text-blue-100/80 mt-2">Round {kingState.roundNumber} • {kingState.timePerQuestion}s per question</div>
+                  </div>
+                  <div className="max-w-xl mx-auto space-y-2">
+                    <div className="flex items-center justify-between text-sm text-blue-100/80"><span>Starting in</span><span>{kingIntroSecondsLeft}s</span></div>
+                    <div className="h-3 rounded-full bg-slate-800 border border-white/10 overflow-hidden"><motion.div className="h-full bg-cyan-400" animate={{ width: `${100 - kingIntroProgress}%` }} transition={{ duration: 0.2 }} /></div>
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          )}
+
+          {screen === "kingGame" && currentQuestion && kingState && (
+            <motion.div key="kingGame" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-3">
+              <Card className="bg-white/10 border-white/10 rounded-3xl shadow-2xl overflow-hidden">
+                <CardContent className="p-4 md:p-5 space-y-4">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge className={`${accentPillClass} border-none`}>King of the Hill</Badge>
+                    <Badge className="bg-white/10 text-white border-none">Round {kingState.roundNumber}</Badge>
+                    <Badge className={`${kingIsUrgent ? "bg-red-500/20 text-red-50" : "bg-white/10 text-white"} border-none`}>{timeLeft}s</Badge>
+                    <Button type="button" onClick={exitToHome} variant="outline" className={cn("ml-auto rounded-2xl", topControlButtonClass)}>Back to Home</Button>
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-xs uppercase tracking-[0.18em] text-blue-100/70">
+                      <span>Question timer</span>
+                      <span>{timeLeft}s / {kingState.timePerQuestion}s</span>
+                    </div>
+                    <div className="h-3 rounded-full bg-slate-900/80 border border-white/10 overflow-hidden">
+                      <motion.div
+                        className={`${kingIsUrgent ? "bg-red-400" : "bg-cyan-400"} h-full`}
+                        animate={{ width: `${Math.max(0, Math.min(100, (timeLeft / Math.max(1, kingState.timePerQuestion || 1)) * 100))}%` }}
+                        transition={{ duration: 0.15 }}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="rounded-3xl bg-slate-950/92 border border-white/10 p-4 space-y-4">
+                    <div className="grid md:grid-cols-[1fr_auto_1fr] gap-4 items-center">
+                      <div className="flex items-center gap-3 justify-end md:justify-end">
+                        <div className="text-right"><div className="text-lg font-black text-white">{playerName?.trim() || "You"}</div></div>
+                        <div className="relative w-20 h-20">
+                          {premiumRingOverlay && <div className={`absolute -inset-1 rounded-full opacity-95 ${premiumRingOverlay} blur-[1px]`} />}
+                          {equippedRingItem?.style && <div className={`absolute inset-0 rounded-full pointer-events-none ${equippedRingItem.style}`} />}
+                          <div className="absolute inset-[6px] rounded-full flex items-center justify-center border border-white/15 overflow-hidden isolate"><div className={getCircularBackgroundClass(equippedBackgroundItem?.style)} />{equippedEmojiItem ? <div className={getEmojiVisualClass(equippedEmojiItem.emoji, "text-4xl")}>{equippedEmojiItem.emoji}</div> : <UserCircle2 className="w-8 h-8 text-blue-100/85" />}</div>
+                        </div>
+                      </div>
+                      <div className="text-center text-3xl md:text-4xl font-black text-white">VS</div>
+                      <div className="flex items-center gap-3 justify-start">
+                        <div className="relative w-20 h-20">
+                          {kingState.challenger?.ringOverlay && <div className={`absolute -inset-1 rounded-full opacity-95 ${kingState.challenger.ringOverlay} blur-[1px]`} />}
+                          {kingState.challenger?.ringStyle && <div className={`absolute inset-0 rounded-full pointer-events-none ${kingState.challenger.ringStyle}`} />}
+                          <div className="absolute inset-[6px] rounded-full flex items-center justify-center border border-white/15 overflow-hidden isolate"><div className={getCircularBackgroundClass(kingState.challenger?.backgroundStyle)} /><div className={getEmojiVisualClass(kingState.challenger?.icon, "text-4xl")}>{kingState.challenger?.icon}</div></div>
+                        </div>
+                        <div><div className="text-lg font-black text-white">{kingState.challenger?.name}</div></div>
+                      </div>
+                    </div>
+
+                    <div className={`rounded-3xl p-4 text-center transition-all duration-200 border ${feedback === "correct" ? "bg-emerald-500/20 ring-2 ring-emerald-400 border-emerald-200/30" : feedback === "incorrect" ? "bg-red-500/20 ring-2 ring-red-400 border-red-200/30" : kingIsUrgent ? "bg-red-500/15 border-red-300/30" : "bg-slate-900/95 border-blue-200/20"}`}>
+                      <div className="text-2xl md:text-4xl font-black text-white leading-tight">{currentQuestion.prompt}</div>
+                    </div>
+
+                    <form onSubmit={handleSubmit} className="space-y-3 max-w-2xl mx-auto">
+                      <Input ref={inputRef} autoFocus value={answer} onChange={(e) => setAnswer(e.target.value)} placeholder="Type answer" className="h-16 rounded-3xl !text-[2.3rem] leading-none font-black tracking-tight bg-white/12 border-white/20 text-white placeholder:text-white/40 text-center" autoComplete="off" />
+                      <Button type="submit" className="w-full h-11 rounded-2xl bg-cyan-500 hover:bg-cyan-400 text-sm md:text-base font-bold">Enter</Button>
+                    </form>
+                  </div>
+
+                  <div className="rounded-2xl bg-slate-900/70 border border-white/10 px-4 py-3 flex flex-wrap items-center justify-between gap-3 text-sm text-white/80">
+                    <span>Round {kingState.roundNumber}</span>
+                    <span>{results.length}/15 answered</span>
+                    <span>{score} correct</span>
+                    <span>{kingState.timePerQuestion}s per question</span>
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          )}
+
+          {screen === "kingIntermission" && kingState && (
+            <motion.div key="kingIntermission" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+              <Card className="bg-white/10 border-white/10 rounded-3xl shadow-2xl">
+                <CardContent className="p-8 md:p-12 text-center space-y-5">
+                  <Trophy className="w-16 h-16 mx-auto text-cyan-200" />
+                  <div className="text-sm uppercase tracking-[0.22em] text-blue-100/70">Round complete</div>
+                  <h2 className="text-3xl md:text-5xl font-black text-white">{kingState.intermissionLabel || "New challenger"}</h2>
+                  <p className="text-blue-100/80">Next round starting soon.</p>
+                </CardContent>
+              </Card>
+            </motion.div>
+          )}
+
+          {screen === "kingResults" && kingState && (
+            <motion.div key="kingResults" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+              <Card className="bg-white/10 border-white/10 rounded-3xl shadow-2xl">
+                <CardContent className="p-8 md:p-12 text-center space-y-6">
+                  <Trophy className="w-20 h-20 mx-auto text-cyan-200" />
+                  <div className="space-y-2">
+                    <div className="text-sm uppercase tracking-[0.22em] text-blue-100/70">King of the Hill finished</div>
+                    <h2 className="text-3xl md:text-5xl font-black text-white">{kingState.failureReason || "Run finished"}</h2>
+                    <p className="text-blue-100/80 max-w-2xl mx-auto">You reached round {kingState.roundNumber} and cleared {kingState.completedRounds || 0} rounds.</p>
+                  </div>
+                  <div className="grid md:grid-cols-4 gap-4 max-w-4xl mx-auto text-left">
+                    <div className="rounded-3xl bg-slate-900/60 border border-white/10 p-5"><div className="text-sm text-blue-100/70 mb-2">Rounds cleared</div><div className="text-4xl font-black text-white">{kingState.completedRounds || 0}</div></div>
+                    <div className="rounded-3xl bg-slate-900/60 border border-white/10 p-5"><div className="text-sm text-blue-100/70 mb-2">Correct</div><div className="text-4xl font-black text-white">{score}</div></div>
+                    <div className="rounded-3xl bg-slate-900/60 border border-white/10 p-5"><div className="text-sm text-blue-100/70 mb-2">Last challenger</div><div className="text-2xl font-black text-white">{kingState.challenger?.name || "-"}</div></div>
+                    <div className="rounded-3xl bg-slate-900/60 border border-white/10 p-5"><div className="text-sm text-blue-100/70 mb-2">Coins</div><div className="text-4xl font-black text-white">+{kingState.coinsEarned || 0}</div></div>
+                  </div>
+                  <div className="max-w-4xl mx-auto text-left rounded-3xl bg-slate-900/60 border border-white/10 p-5 space-y-4">
+                    <h3 className="text-xl font-bold text-white">Opponents beaten</h3>
+                    {(kingState.beatenOpponents || []).length > 0 ? (
+                      <div className="grid md:grid-cols-2 gap-3">
+                        {(kingState.beatenOpponents || []).map((opponent, index) => (
+                          <div key={`${opponent.id}-${index}`} className="rounded-2xl bg-slate-950/70 border border-white/10 px-4 py-3 flex items-center gap-3">
+                            <div className="text-3xl">{opponent.icon}</div>
+                            <div><div className="text-white font-semibold">Round {opponent.roundNumber} • {opponent.name}</div></div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : <div className="rounded-2xl bg-slate-950/70 border border-white/10 p-4 text-white/70">No challengers beaten yet.</div>}
+                  </div>
+                  <div className="max-w-3xl mx-auto text-left rounded-3xl bg-slate-900/60 border border-white/10 p-5 space-y-4">
+                    <h3 className="text-xl font-bold text-white">Incorrect answers</h3>
+                    {incorrectItems.length > 0 ? incorrectItems.map((item, index) => (
+                      <div key={`${item.prompt}-${index}`} className="rounded-2xl bg-slate-950/70 border border-white/10 p-4 space-y-1"><div className="text-white font-semibold">{item.prompt}</div><div className="text-sm text-red-200">Your answer: {item.given || "No answer"}</div><div className="text-sm text-emerald-200">Correct answer: {item.expected}</div></div>
+                    )) : <div className="rounded-2xl bg-slate-950/70 border border-white/10 p-4 text-emerald-200 font-semibold">No incorrect answers this run.</div>}
+                  </div>
+                  <div className="flex justify-center gap-3 flex-wrap">
+                    <Button onClick={() => startKingMode(kingState.selectedMode)} className={`rounded-2xl h-12 px-6 ${actionButtonClass} text-white font-bold`}>Play Again</Button>
+                    <Button onClick={backToHome} variant="outline" className="rounded-2xl h-12 px-6 border-white/20 bg-white/5 text-white hover:bg-white/10 font-bold">Go Home</Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          )}
+
+          {screen === "tugSelect" && (
+            <motion.div key="tugSelect" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+              <Card className="bg-white/10 border-white/10 rounded-3xl shadow-2xl">
+                <CardContent className="p-6 md:p-8 space-y-6">
+                  <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                    <div>
+                      <h2 className="text-2xl md:text-3xl font-bold">Tug of War</h2>
+                      <p className="text-blue-100/80 mt-2">Beat 10 teacher opponents by pulling the rope your way.</p>
+                    </div>
+                    <Button variant="outline" onClick={backToHome} className="rounded-2xl border-white/20 bg-white/5 text-white hover:bg-white/10">Back</Button>
+                  </div>
+                  <div className="grid md:grid-cols-3 gap-4">
+                    {[
+                      { key: "addsub", title: "Addition / Subtraction", detail: `Uses ${testingScores.addsubScore !== null ? userHistory.addsubLevel : "_____"}`, unlocked: hasAddSubPlacement },
+                      { key: "muldiv", title: "Multiplication / Division", detail: `Uses ${testingScores.muldivScore !== null ? userHistory.muldivLevel : "_____"}`, unlocked: hasMulDivPlacement },
+                      { key: "mixed", title: "Mixed", detail: hasMixedPlacement ? `Uses ${userHistory.addsubLevel} + ${userHistory.muldivLevel}` : "Requires both saved test strands", unlocked: hasMixedPlacement },
+                    ].map((item) => (
+                      <Card key={item.key} className={`bg-slate-900/60 border-white/10 rounded-3xl ${!item.unlocked ? "opacity-55" : ""}`}>
+                        <CardContent className="p-5 space-y-4">
+                          <div className="flex items-center gap-3"><Users className="w-6 h-6 text-cyan-100" /><h3 className="text-xl font-bold text-white">{item.title}</h3></div>
+                          <p className="text-blue-100/75">{item.detail}</p>
+                          <Button onClick={() => startTugMode(item.key)} disabled={!item.unlocked} className="w-full rounded-2xl bg-cyan-500 hover:bg-cyan-400 text-white disabled:bg-slate-700 disabled:text-slate-300">Start</Button>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          )}
+
+          {screen === "tugIntro" && tugState && (
+            <motion.div key="tugIntro" initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}>
+              <Card className="bg-white/10 border-white/10 rounded-3xl shadow-2xl">
+                <CardContent className="p-8 md:p-12 text-center space-y-6">
+                  <div className="text-sm uppercase tracking-[0.22em] text-blue-100/70">Teacher battle</div>
+                  <div className="flex justify-center items-center gap-6">
+                    <div className="relative w-24 h-24"><div className="absolute inset-[6px] rounded-full flex items-center justify-center border border-white/15 overflow-hidden isolate"><div className={getCircularBackgroundClass(equippedBackgroundItem?.style)} />{equippedEmojiItem ? <div className={getEmojiVisualClass(equippedEmojiItem.emoji, "text-5xl")}>{equippedEmojiItem.emoji}</div> : <UserCircle2 className="w-10 h-10 text-blue-100/85" />}</div></div>
+                    <div className="text-4xl md:text-5xl font-black text-white">VS</div>
+                    <div className="relative w-24 h-24"><div className="absolute inset-[6px] rounded-full flex items-center justify-center border border-white/15 overflow-hidden isolate"><div className={getCircularBackgroundClass(tugState.challenger?.backgroundStyle)} /><div className={getEmojiVisualClass(tugState.challenger?.icon, "text-5xl")}>{tugState.challenger?.icon}</div></div></div>
+                  </div>
+                  <div>
+                    <div className="text-3xl md:text-5xl font-black text-white">{tugState.challenger?.name}</div>
+                    <div className="text-blue-100/80 mt-2">Round {tugState.roundNumber} of {TUG_OF_WAR_TOTAL_ROUNDS}</div>
+                  </div>
+                  <div className="max-w-xl mx-auto space-y-2">
+                    <div className="flex items-center justify-between text-sm text-blue-100/80"><span>Starting in</span><span>{tugIntroSecondsLeft}s</span></div>
+                    <div className="h-3 rounded-full bg-slate-800 border border-white/10 overflow-hidden"><motion.div className="h-full bg-cyan-400" animate={{ width: `${100 - tugIntroProgress}%` }} transition={{ duration: 0.2 }} /></div>
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          )}
+
+          {screen === "tugGame" && currentQuestion && tugState && (
+            <motion.div key="tugGame" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-3">
+              <Card className="bg-white/10 border-white/10 rounded-3xl shadow-2xl overflow-hidden">
+                <CardContent className="p-4 md:p-5 space-y-4">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge className={`${accentPillClass} border-none`}>Tug of War</Badge>
+                    <Badge className="bg-white/10 text-white border-none">Round {tugState.roundNumber} / {TUG_OF_WAR_TOTAL_ROUNDS}</Badge>
+                    <Button type="button" onClick={exitToHome} variant="outline" className={cn("ml-auto rounded-2xl", topControlButtonClass)}>Back to Home</Button>
+                  </div>
+
+                  <div className="grid xl:grid-cols-[minmax(0,1fr)_280px] gap-3 items-start">
+                    <div className="space-y-3">
+                      <div className={cn("rounded-3xl bg-slate-950/92 border border-white/10 p-4 space-y-5", tugFlash?.side === "player" && "ring-2 ring-emerald-400", tugFlash?.side === "teacher" && "ring-2 ring-emerald-400") }>
+                        <div className="grid md:grid-cols-[1fr_auto_1fr] gap-4 items-center">
+                          <div className="flex items-center gap-3 justify-end">
+                            <div className="text-right">
+                              <div className="text-xs uppercase tracking-[0.18em] text-blue-100/65">Player</div>
+                              <div className="text-lg font-black text-white">{playerName?.trim() || "You"}</div>
+                            </div>
+                            <div className="w-16 h-16 rounded-full border border-white/15 bg-slate-900/90 flex items-center justify-center text-3xl shrink-0">{equippedEmojiItem?.emoji || "🙂"}</div>
+                          </div>
+                          <div className="text-center text-2xl md:text-3xl font-black text-white">VS</div>
+                          <div className="flex items-center gap-3 justify-start">
+                            <div className="w-16 h-16 rounded-full border border-white/15 bg-slate-900/90 flex items-center justify-center text-3xl shrink-0">{tugState.challenger?.icon || "🧑‍🏫"}</div>
+                            <div>
+                              <div className="text-xs uppercase tracking-[0.18em] text-blue-100/65">Teacher</div>
+                              <div className="text-lg font-black text-white">{tugState.challenger?.name}</div>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="rounded-3xl bg-slate-900/92 border border-white/10 px-5 py-6 space-y-3">
+                          <div className="flex items-center justify-between text-xs uppercase tracking-[0.18em] text-blue-100/65">
+                            <span>Your side</span>
+                            <span>Teacher side</span>
+                          </div>
+                          <div className="relative h-14 rounded-full overflow-hidden">
+                            <div className="absolute inset-x-[8%] top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-white/15" />
+                            <div className="absolute left-1/2 top-1/2 h-8 w-[2px] -translate-x-1/2 -translate-y-1/2 bg-white/35" />
+                            <div className={cn("absolute left-[8%] top-1/2 -translate-y-1/2 text-xl transition-transform", tugFlash?.side === "player" && "scale-125")}>{equippedEmojiItem?.emoji || "🙂"}</div>
+                            <div className={cn("absolute right-[8%] top-1/2 -translate-y-1/2 text-xl transition-transform", tugFlash?.side === "teacher" && "scale-125")}>{tugState.challenger?.icon || "🧑‍🏫"}</div>
+                            <motion.div
+                              className="absolute top-1/2 h-6 w-6 rounded-full border-2 border-cyan-100 bg-cyan-300 shadow-[0_0_18px_rgba(103,232,249,0.45)] -translate-x-1/2 -translate-y-1/2"
+                              animate={{ left: `${Math.max(8, Math.min(92, typeof tugState?.ropePosition === "number" ? tugState.ropePosition : 50))}%` }}
+                              transition={{ duration: 0.16 }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className={`rounded-3xl p-4 text-center transition-all duration-200 border ${feedback === "correct" ? "bg-emerald-500/20 ring-2 ring-emerald-400 border-emerald-200/30" : feedback === "incorrect" ? "bg-red-500/20 ring-2 ring-red-400 border-red-200/30" : "bg-slate-900/95 border-blue-200/20"}`}>
+                        <div className="text-2xl md:text-3xl font-black text-white leading-tight">{currentQuestion.prompt}</div>
+                      </div>
+
+                      <form onSubmit={handleSubmit} className="space-y-3">
+                        <Input ref={inputRef} autoFocus value={answer} onChange={(e) => setAnswer(e.target.value)} placeholder="Type answer" className="h-16 rounded-3xl !text-[2.3rem] leading-none font-black tracking-tight bg-white/12 border-white/20 text-white placeholder:text-white/40 text-center" autoComplete="off" />
+                        <Button type="submit" className="w-full h-11 rounded-2xl bg-cyan-500 hover:bg-cyan-400 text-sm md:text-base font-bold">Enter</Button>
+                      </form>
+                    </div>
+
+                    <Card className="bg-white/5 border-white/10 rounded-3xl">
+                      <CardContent className="p-4 space-y-3">
+                        <div className="rounded-2xl bg-slate-900/65 border border-white/10 px-4 py-3"><div className="text-[10px] uppercase tracking-[0.16em] text-blue-100/65">Round</div><div className="text-2xl font-black text-white mt-1">{tugState.roundNumber}</div></div>
+                        <div className="rounded-2xl bg-slate-900/65 border border-white/10 px-4 py-3"><div className="text-[10px] uppercase tracking-[0.16em] text-blue-100/65">Correct</div><div className="text-2xl font-black text-white mt-1">{tugState.totalCorrectAnswers || 0}</div></div>
+                        <div className="rounded-2xl bg-slate-900/65 border border-white/10 px-4 py-3"><div className="text-[10px] uppercase tracking-[0.16em] text-blue-100/65">Teachers beaten</div><div className="text-2xl font-black text-white mt-1">{(tugState.beatenTeachers || []).length}</div></div>
+                      </CardContent>
+                    </Card>
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          )}
+
+          {screen === "tugResults" && tugState && (
+            <motion.div key="tugResults" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+              <Card className="bg-white/10 border-white/10 rounded-3xl shadow-2xl">
+                <CardContent className="p-8 md:p-12 text-center space-y-6">
+                  <Trophy className="w-20 h-20 mx-auto text-cyan-200" />
+                  <div className="space-y-2">
+                    <div className="text-sm uppercase tracking-[0.22em] text-blue-100/70">Tug of War finished</div>
+                    <h2 className="text-3xl md:text-5xl font-black text-white">{tugState.victory ? "You beat all 10 teachers" : tugState.failureReason || "Run finished"}</h2>
+                    <p className="text-blue-100/80 max-w-2xl mx-auto">{tugState.challenger?.name ? `Final opponent: ${tugState.challenger.name}.` : ""}</p>
+                  </div>
+                  <div className="grid md:grid-cols-5 gap-4 max-w-5xl mx-auto text-left">
+                    <div className="rounded-3xl bg-slate-900/60 border border-white/10 p-5"><div className="text-sm text-blue-100/70 mb-2">Rounds beaten</div><div className="text-4xl font-black text-white">{(tugState.beatenTeachers || []).length}</div></div>
+                    <div className="rounded-3xl bg-slate-900/60 border border-white/10 p-5"><div className="text-sm text-blue-100/70 mb-2">Total correct</div><div className="text-4xl font-black text-white">{tugState.totalCorrectAnswers || 0}</div></div>
+                    <div className="rounded-3xl bg-slate-900/60 border border-white/10 p-5"><div className="text-sm text-blue-100/70 mb-2">Time</div><div className="text-4xl font-black text-white">{tugState.totalDurationSeconds || 0}s</div></div>
+                    <div className="rounded-3xl bg-slate-900/60 border border-white/10 p-5"><div className="text-sm text-blue-100/70 mb-2">Average time</div><div className="text-4xl font-black text-white">{tugState.totalCorrectAnswers ? Math.max(1, Math.round((tugState.totalDurationSeconds || 0) / tugState.totalCorrectAnswers)) : 0}s</div></div>
+                    <div className="rounded-3xl bg-slate-900/60 border border-white/10 p-5"><div className="text-sm text-blue-100/70 mb-2">Coins</div><div className="text-4xl font-black text-white">+{tugState.coinsEarned || 0}</div></div>
+                  </div>
+                  <div className="max-w-4xl mx-auto text-left rounded-3xl bg-slate-900/60 border border-white/10 p-5 space-y-4">
+                    <h3 className="text-xl font-bold text-white">Teachers beaten</h3>
+                    {(tugState.beatenTeachers || []).length > 0 ? (
+                      <div className="space-y-3 max-h-[360px] overflow-auto pr-1">
+                        {(tugState.beatenTeachers || []).map((teacher, index) => (
+                          <div key={`${teacher.id}-${index}`} className="rounded-2xl bg-slate-950/70 border border-white/10 px-4 py-3 flex items-center justify-between gap-3">
+                            <div className="flex items-center gap-3"><div className="text-3xl">{teacher.icon}</div><div><div className="text-white font-semibold">Round {teacher.roundNumber} • {teacher.name}</div><div className="text-xs text-white/65">{teacher.correctAnswers} correct • {teacher.durationSeconds}s</div></div></div>
+                            <div className="text-sm text-blue-100/75">Avg {teacher.averageSecondsPerCorrect ? teacher.averageSecondsPerCorrect.toFixed(1) : "-"}s</div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : <div className="rounded-2xl bg-slate-950/70 border border-white/10 p-4 text-white/70">No teachers beaten yet.</div>}
+                  </div>
+                  <div className="flex justify-center gap-3 flex-wrap">
+                    <Button onClick={() => startTugMode(tugState.selectedMode)} className={`rounded-2xl h-12 px-6 ${actionButtonClass} text-white font-bold`}>Play Again</Button>
+                    <Button onClick={backToHome} variant="outline" className="rounded-2xl h-12 px-6 border-white/20 bg-white/5 text-white hover:bg-white/10 font-bold">Go Home</Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          )}
+
+          {screen === "freeFallSelect" && (
+            <motion.div key="freeFallSelect" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+              <Card className="bg-white/10 border-white/10 rounded-3xl shadow-2xl">
+                <CardContent className="p-6 md:p-8 space-y-6">
+                  <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                    <div>
+                      <h2 className="text-2xl md:text-3xl font-bold">Free Fall</h2>
+                      <p className="text-blue-100/80 mt-2">Questions fall toward the bottom. Miss three and the run ends.</p>
+                    </div>
+                    <Button variant="outline" onClick={backToHome} className="rounded-2xl border-white/20 bg-white/5 text-white hover:bg-white/10">Back</Button>
+                  </div>
+                  <div className="grid md:grid-cols-3 gap-4">
+                    {[
+                      { key: "addsub", title: "Addition / Subtraction", detail: `Uses ${testingScores.addsubScore !== null ? userHistory.addsubLevel : "_____"}`, unlocked: hasAddSubPlacement },
+                      { key: "muldiv", title: "Multiplication / Division", detail: `Uses ${testingScores.muldivScore !== null ? userHistory.muldivLevel : "_____"}`, unlocked: hasMulDivPlacement },
+                      { key: "mixed", title: "Mixed", detail: hasMixedPlacement ? `Uses ${userHistory.addsubLevel} + ${userHistory.muldivLevel}` : "Requires both saved test strands", unlocked: hasMixedPlacement },
+                    ].map((item) => (
+                      <Card key={item.key} className={`bg-slate-900/60 border-white/10 rounded-3xl ${!item.unlocked ? "opacity-55" : ""}`}>
+                        <CardContent className="p-5 space-y-4">
+                          <div className="flex items-center gap-3"><Calculator className="w-6 h-6 text-cyan-100" /><h3 className="text-xl font-bold text-white">{item.title}</h3></div>
+                          <p className="text-blue-100/75">{item.detail}</p>
+                          <Button onClick={() => startFreeFallMode(item.key)} disabled={!item.unlocked} className="w-full rounded-2xl bg-cyan-500 hover:bg-cyan-400 text-white disabled:bg-slate-700 disabled:text-slate-300">Start</Button>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          )}
+
+          {screen === "freeFallGame" && freeFallState && (
+            <motion.div key="freeFallGame" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-3">
+              <Card className="bg-white/10 border-white/10 rounded-3xl shadow-2xl overflow-hidden">
+                <CardContent className="p-4 md:p-5 space-y-4">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge className={`${accentPillClass} border-none`}>Free Fall</Badge>
+                    <Badge className="bg-white/10 text-white border-none">{freeFallState.levelLabel}</Badge>
+                    <Badge className="bg-white/10 text-white border-none">Level {freeFallDifficultyLevel}</Badge>
+                    <Button type="button" onClick={exitToHome} variant="outline" className={cn("ml-auto rounded-2xl", topControlButtonClass)}>Back to Home</Button>
+                  </div>
+
+                  <div className="grid xl:grid-cols-[minmax(0,1fr)_260px] gap-3 items-start">
+                    <div className="space-y-3">
+                      <div className="relative rounded-3xl bg-slate-950/92 border border-white/10 overflow-hidden min-h-[480px]">
+                        <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(30,41,59,0.12)_0%,rgba(15,23,42,0)_28%,rgba(15,23,42,0)_72%,rgba(30,41,59,0.22)_100%)]" />
+                        {(freeFallState.activeQuestions || []).slice(0, freeFallMaxOnScreen).map((question) => {
+                          const topPercent = 6 + Math.min(68, Number(question.progress || 0) * 68 * freeFallVisualSpeedMultiplier);
+                          const isGoldActive = Boolean(question.isSpecial && !question.resolvedAt && Date.now() <= Number(question.goldUntil || 0));
+                          return (
+                            <motion.div
+                              key={question.id}
+                              initial={{ opacity: 0, scale: 0.92 }}
+                              animate={{ opacity: 1, scale: 1 }}
+                              style={{ left: `${question.lane}%`, top: `${topPercent}%`, width: "18%" }}
+                              className={cn(
+                                "absolute z-20 -translate-x-1/2 rounded-2xl border px-3 py-3 text-center shadow-[0_14px_30px_rgba(15,23,42,0.35)] transition-all duration-150",
+                                question.flash === "correct"
+                                  ? "bg-emerald-500/30 border-emerald-300/40 text-emerald-50"
+                                  : question.flash === "miss"
+                                  ? "bg-red-500/35 border-red-300/45 text-red-50"
+                                  : isGoldActive
+                                  ? "bg-amber-400/25 border-amber-200/45 text-amber-50 animate-pulse"
+                                  : question.isFast
+                                  ? "bg-red-500/28 border-red-300/40 text-red-50"
+                                  : "bg-slate-900/92 border-white/12 text-white"
+                              )}
+                            >
+                              {isGoldActive && <div className="text-[10px] font-black uppercase tracking-[0.18em] text-amber-100/90 mb-1">{question.flash === "correct" ? "+1 Life" : "Gold"}</div>}
+                              {!isGoldActive && question.isFast && <div className="text-[10px] font-black uppercase tracking-[0.18em] text-red-100/90 mb-1">Fast</div>}
+                              <div className="text-lg md:text-xl font-black leading-tight">{question.prompt}</div>
+                            </motion.div>
+                          );
+                        })}
+
+                        <div className="absolute inset-x-0 bottom-0 h-[72px] bg-slate-500 border-t border-slate-200/30" />
+                        <div className="absolute inset-x-0 bottom-[54px] h-[18px] flex items-end justify-between px-1 md:px-2 overflow-hidden">
+                          {Array.from({ length: 18 }).map((_, index) => (
+                            <div key={index} className="w-[5.2%] h-full rounded-t-md bg-slate-500 border border-slate-200/20 border-b-0" />
+                          ))}
+                        </div>
+                        <div className="absolute left-0 bottom-[22px] w-[20%] h-[64px] bg-slate-500 border-y border-r border-slate-200/20 rounded-r-xl" />
+                        <div className="absolute right-0 bottom-[22px] w-[20%] h-[64px] bg-slate-500 border-y border-l border-slate-200/20 rounded-l-xl" />
+                        <div className="absolute left-[10%] bottom-[48px] w-8 h-16 rounded-t-xl bg-slate-500 border border-slate-200/20" />
+                        <div className="absolute right-[10%] bottom-[48px] w-8 h-16 rounded-t-xl bg-slate-500 border border-slate-200/20" />
+                        <div className="absolute left-1/2 bottom-[18px] -translate-x-1/2 w-[140px] h-[78px] rounded-t-[28px] bg-slate-600 border border-slate-200/25 shadow-[0_0_30px_rgba(15,23,42,0.4)]" />
+                        <div className="absolute left-1/2 bottom-[8px] -translate-x-1/2 w-16 h-12 rounded-t-2xl bg-slate-600 border border-slate-200/25" />
+                        <div className="absolute left-1/2 bottom-[28px] -translate-x-1/2 text-4xl">{equippedEmojiItem?.emoji || "🙂"}</div>
+
+                        <div className="absolute left-3 top-3 flex items-center gap-1.5 z-30">
+                          {Array.from({ length: Math.max(0, freeFallState.lives || 0) }).map((_, index) => (
+                            <div key={`life-${index}`} className="text-xl drop-shadow-[0_0_10px_rgba(248,113,113,0.35)]">❤️</div>
+                          ))}
+                        </div>
+                        <div className="absolute right-3 top-3 z-30 rounded-2xl bg-slate-950/85 border border-white/10 px-3 py-2 text-right">
+                          <div className="text-[10px] uppercase tracking-[0.18em] text-blue-100/65">Timer</div>
+                          <div className="text-xl font-black text-white">{freeFallState.elapsedSeconds || 0}s</div>
+                        </div>
+                        {freeFallState.correctAnswers > 0 && freeFallState.correctAnswers % 20 === 0 && (
+                          <div className="absolute inset-x-0 top-16 flex justify-center z-30 pointer-events-none">
+                            <div className="rounded-2xl bg-cyan-400/20 border border-cyan-200/30 px-4 py-2 text-cyan-100 font-black uppercase tracking-[0.22em] shadow-[0_0_24px_rgba(34,211,238,0.2)]">Level Up</div>
+                          </div>
+                        )}
+                        <div className="absolute right-3 top-20 space-y-2">
+                          {(freeFallState.announcements || []).map((item) => (
+                            <div key={item.id} className={cn("rounded-2xl px-3 py-2 text-sm font-bold border", item.style === "life"
+                                ? "bg-emerald-500/20 border-emerald-300/30 text-emerald-100"
+                                : item.style === "level"
+                                ? "bg-cyan-400/20 border-cyan-200/30 text-cyan-100"
+                                : "bg-red-500/20 border-red-300/30 text-red-100")}>{item.text}</div>
+                          ))}
+                        </div>
+                      </div>
+
+                      <form onSubmit={handleSubmit} className="space-y-3">
+                        <Input ref={inputRef} autoFocus value={answer} onChange={(e) => setAnswer(e.target.value)} placeholder="Type answer" className="h-16 rounded-3xl !text-[2.3rem] leading-none font-black tracking-tight bg-white/12 border-white/20 text-white placeholder:text-white/40 text-center" autoComplete="off" />
+                        <Button type="submit" className="w-full h-11 rounded-2xl bg-cyan-500 hover:bg-cyan-400 text-sm md:text-base font-bold">Enter</Button>
+                      </form>
+                    </div>
+
+                    <Card className="bg-white/5 border-white/10 rounded-3xl">
+                      <CardContent className="p-4 space-y-3">
+                        <div className="rounded-2xl bg-slate-900/65 border border-white/10 px-4 py-3"><div className="text-[11px] uppercase tracking-[0.16em] text-blue-100/65">Correct</div><div className="text-3xl font-black text-white mt-1">{freeFallState.correctAnswers || 0}</div></div>
+                        <div className="rounded-2xl bg-slate-900/65 border border-white/10 px-4 py-3"><div className="text-[11px] uppercase tracking-[0.16em] text-blue-100/65">Difficulty</div><div className="text-3xl font-black text-white mt-1">Lv {freeFallDifficultyLevel}</div></div>
+                        <div className="rounded-2xl bg-slate-900/65 border border-white/10 px-4 py-3"><div className="text-[11px] uppercase tracking-[0.16em] text-blue-100/65">Max on screen</div><div className="text-3xl font-black text-white mt-1">{freeFallMaxOnScreen}</div></div>
+                        <div className="rounded-2xl bg-slate-900/65 border border-white/10 px-4 py-3"><div className="text-[11px] uppercase tracking-[0.16em] text-blue-100/65">On screen</div><div className="text-3xl font-black text-white mt-1">{(freeFallState.activeQuestions || []).filter((question) => !question.resolvedAt).length}</div></div>
+                        <div className="rounded-2xl bg-slate-900/65 border border-white/10 px-4 py-3"><div className="text-[11px] uppercase tracking-[0.16em] text-blue-100/65">High score</div><div className="text-3xl font-black text-white mt-1">{freeFallModeHighScoreSeconds || freeFallHighScoreSeconds || 0}s</div></div>
+                      </CardContent>
+                    </Card>
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          )}
+
+          {screen === "freeFallResults" && freeFallState && (
+            <motion.div key="freeFallResults" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+              <Card className="bg-white/10 border-white/10 rounded-3xl shadow-2xl">
+                <CardContent className="p-8 md:p-12 text-center space-y-6">
+                  <Trophy className="w-20 h-20 mx-auto text-cyan-200" />
+                  <div className="space-y-2">
+                    <div className="text-sm uppercase tracking-[0.22em] text-blue-100/70">Free Fall finished</div>
+                    <h2 className="text-3xl md:text-5xl font-black text-white">{freeFallState.failureReason || "Run finished"}</h2>
+                    <p className="text-blue-100/80 max-w-2xl mx-auto">Your high score in this mode is based on time survived.</p>
+                  </div>
+                  <div className="grid md:grid-cols-5 gap-4 max-w-5xl mx-auto text-left">
+                    <div className="rounded-3xl bg-slate-900/60 border border-white/10 p-5"><div className="text-sm text-blue-100/70 mb-2">Time survived</div><div className="text-4xl font-black text-white">{freeFallState.elapsedSeconds || 0}s</div></div>
+                    <div className="rounded-3xl bg-slate-900/60 border border-white/10 p-5"><div className="text-sm text-blue-100/70 mb-2">Correct answers</div><div className="text-4xl font-black text-white">{freeFallState.correctAnswers || 0}</div></div>
+                    <div className="rounded-3xl bg-slate-900/60 border border-white/10 p-5"><div className="text-sm text-blue-100/70 mb-2">Best streak</div><div className="text-4xl font-black text-white">{freeFallState.bestStreak || 0}</div></div>
+                    <div className="rounded-3xl bg-slate-900/60 border border-white/10 p-5"><div className="text-sm text-blue-100/70 mb-2">High score</div><div className="text-4xl font-black text-white">{freeFallState.highScoreSeconds || freeFallHighScoreSeconds || 0}s</div></div>
+                    <div className="rounded-3xl bg-slate-900/60 border border-white/10 p-5"><div className="text-sm text-blue-100/70 mb-2">Coins</div><div className="text-4xl font-black text-white">+{freeFallState.coinsEarned || 0}</div></div>
+                  </div>
+
+                  <div className="max-w-3xl mx-auto text-left rounded-3xl bg-slate-900/60 border border-white/10 p-5 space-y-4">
+                    <h3 className="text-xl font-bold text-white">Incorrect answers</h3>
+                    {(freeFallState.incorrectItems || []).length > 0 ? (
+                      <div className="space-y-3 max-h-[360px] overflow-auto pr-1">
+                        {(freeFallState.incorrectItems || []).map((item, index) => (
+                          <div key={`${item.prompt}-${index}`} className="rounded-2xl bg-slate-950/70 border border-white/10 p-4 space-y-1">
+                            <div className="text-white font-semibold">{item.prompt}</div>
+                            <div className="text-sm text-red-200">Your answer: {item.given || "No answer"}</div>
+                            <div className="text-sm text-emerald-200">Correct answer: {item.expected}</div>
+                            <div className="text-sm text-blue-100/80">{item.strategy}</div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="rounded-2xl bg-slate-950/70 border border-white/10 p-4 text-emerald-200 font-semibold">No missed questions to review. Great work.</div>
+                    )}
+                  </div>
+
+                  <div className="flex justify-center gap-3 flex-wrap">
+                    <Button onClick={() => startFreeFallMode(freeFallState.selectedMode)} className={`rounded-2xl h-12 px-6 ${actionButtonClass} text-white font-bold`}>Play Again</Button>
+                    <Button onClick={backToHome} variant="outline" className="rounded-2xl h-12 px-6 border-white/20 bg-white/5 text-white hover:bg-white/10 font-bold">Go Home</Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          )}
+
+          {screen === "history" && (
+            <motion.div key="history" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+              <Card className="bg-white/10 border-white/10 rounded-3xl shadow-2xl">
+                <CardContent className="p-6 md:p-8 space-y-6">
+                  <div className="flex items-center justify-between gap-4 flex-wrap">
+                    <div>
+                      <h2 className="text-2xl md:text-3xl font-bold text-white">History</h2>
+                      <p className="text-blue-100/80 mt-2">All-time stats and the past 7 days.</p>
+                    </div>
+                    <Button variant="outline" onClick={backToHome} className="rounded-2xl border-white/20 bg-white/5 text-white hover:bg-white/10">Back</Button>
+                  </div>
+                  <div className="grid lg:grid-cols-2 gap-5">
+                    <div className="rounded-3xl bg-slate-900/60 border border-white/10 p-5 space-y-4">
+                      <h3 className="text-xl font-bold text-white">All time</h3>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="rounded-2xl bg-slate-950/70 border border-white/10 p-4"><div className="text-sm text-blue-100/70">Time played</div><div className="text-3xl font-black text-white mt-1">{formatStatDuration(historyStats.all.totalSeconds)}</div></div>
+                        <div className="rounded-2xl bg-slate-950/70 border border-white/10 p-4"><div className="text-sm text-blue-100/70">Correct answers</div><div className="text-3xl font-black text-white mt-1">{historyStats.all.correctAnswers}</div></div>
+                        <div className="rounded-2xl bg-slate-950/70 border border-white/10 p-4"><div className="text-sm text-blue-100/70">Coins earned</div><div className="text-3xl font-black text-white mt-1">{historyStats.all.coinsEarned}</div></div>
+                        <div className="rounded-2xl bg-slate-950/70 border border-white/10 p-4"><div className="text-sm text-blue-100/70">Fastest race</div><div className="text-3xl font-black text-white mt-1">{historyStats.all.fastestRaceTime ? `${historyStats.all.fastestRaceTime}s` : "-"}</div></div>
+                      </div>
+                    </div>
+                    <div className="rounded-3xl bg-slate-900/60 border border-white/10 p-5 space-y-4">
+                      <h3 className="text-xl font-bold text-white">Past 7 days</h3>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="rounded-2xl bg-slate-950/70 border border-white/10 p-4"><div className="text-sm text-blue-100/70">Time played</div><div className="text-3xl font-black text-white mt-1">{formatStatDuration(historyStats.week.totalSeconds)}</div></div>
+                        <div className="rounded-2xl bg-slate-950/70 border border-white/10 p-4"><div className="text-sm text-blue-100/70">Correct answers</div><div className="text-3xl font-black text-white mt-1">{historyStats.week.correctAnswers}</div></div>
+                        <div className="rounded-2xl bg-slate-950/70 border border-white/10 p-4"><div className="text-sm text-blue-100/70">Coins earned</div><div className="text-3xl font-black text-white mt-1">{historyStats.week.coinsEarned}</div></div>
+                        <div className="rounded-2xl bg-slate-950/70 border border-white/10 p-4"><div className="text-sm text-blue-100/70">Fastest race</div><div className="text-3xl font-black text-white mt-1">{historyStats.week.fastestRaceTime ? `${historyStats.week.fastestRaceTime}s` : "-"}</div></div>
+                      </div>
                     </div>
                   </div>
                 </CardContent>
               </Card>
+            </motion.div>
+          )}
 
-              {roundReward && (
-                <motion.div initial={{ opacity: 0, y: 12, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ duration: 0.35 }}>
-                  <Card className="bg-cyan-500/10 border-cyan-300/20 rounded-3xl shadow-2xl">
-                    <CardContent className="p-6 md:p-8 text-center space-y-4">
-                      <div className="text-sm uppercase tracking-[0.25em] text-cyan-100/70">Coin Reward</div>
-                      <div className="text-4xl md:text-5xl font-black text-cyan-50">+{roundReward.totalCoins} coins</div>
-                      <div className="flex flex-wrap justify-center gap-3 text-sm">
-                        <Badge className="bg-white/10 text-cyan-50 border-none">{roundReward.correctCount} correct = +{roundReward.baseCoins}</Badge>
-                        {roundReward.bonusCoins > 0 && (
-                          <motion.div initial={{ opacity: 0, scale: 0.7 }} animate={{ opacity: 1, scale: [1, 1.12, 1] }} transition={{ duration: 0.6 }}>
-                            <Badge className="bg-amber-400/20 text-amber-50 border-none">Bonus coins +{roundReward.bonusCoins}</Badge>
-                          </motion.div>
-                        )}
-                        {roundReward.testingModeActive && <Badge className="bg-emerald-400/20 text-emerald-50 border-none">Testing mode double coins</Badge>}
-                        {roundReward.activeMode === "mixed" && <Badge className="bg-cyan-400/20 text-cyan-50 border-none">Mixed mode 1.5x coins</Badge>}
-                        {roundReward.levelMatchMultiplier > 1 && <Badge className="bg-emerald-400/20 text-emerald-50 border-none">Current level double coins</Badge>}
-                        {roundReward.boostMultiplier > 1 && <Badge className="bg-fuchsia-400/20 text-fuchsia-50 border-none">Coin multiplier active</Badge>}
-                      </div>
-                    </CardContent>
-                  </Card>
-                </motion.div>
-              )}
-
-              {passed ? (
-                <Card className="bg-emerald-500/15 border-emerald-300/20 rounded-3xl">
-                  <CardContent className="p-8 text-center space-y-4">
-                    <motion.div initial={{ scale: 0.9 }} animate={{ scale: [1, 1.05, 1] }} transition={{ repeat: 2, duration: 0.5 }}>
-                      <Trophy className="w-16 h-16 mx-auto text-emerald-200" />
-                    </motion.div>
-                    <h3 className="text-4xl md:text-5xl font-black tracking-wide">LEVEL UP!</h3>
-                    <p className="text-emerald-50/90 max-w-2xl mx-auto">
-                      Amazing work. You reached the level-up score by getting at least 14 correct.
-                    </p>
-                    <div className="flex flex-wrap justify-center gap-3 pt-2">
-                      <Button onClick={restartSameLevel} className="rounded-2xl h-12 px-6 bg-emerald-500 hover:bg-emerald-400 text-white font-bold">
-                        Play Again
-                      </Button>
-                      {score >= 14 && (
-                        <Button onClick={startTestingMode} variant="outline" className="rounded-2xl h-12 px-6 border-emerald-300/30 bg-emerald-400/10 text-emerald-100 hover:bg-emerald-400/20">
-                          Retake Test
-                        </Button>
-                      )}
-                      <Button onClick={backToHome} variant="outline" className="rounded-2xl h-12 px-6 border-white/20 bg-white/5 text-white hover:bg-white/10">
-                        Go Home
-                      </Button>
+          {screen === "testingRetryPrompt" && testingState?.pendingRetry && (
+            <motion.div
+              key="testingRetryPrompt"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+            >
+              <Card className="bg-white/10 border-white/10 rounded-3xl shadow-2xl">
+                <CardContent className="p-8 md:p-10 text-center space-y-5">
+                  <div className="flex justify-center">
+                    <div className="w-20 h-20 rounded-full flex items-center justify-center border-2 bg-amber-500/15 border-amber-300/40">
+                      <Sparkles className="w-10 h-10 text-amber-200" />
                     </div>
-                  </CardContent>
-                </Card>
-              ) : (
-                <div className="grid lg:grid-cols-2 gap-5">
-                  <Card className="bg-white/10 border-white/10 rounded-3xl">
-                    <CardContent className="p-6 md:p-8">
-                      <h3 className="text-2xl font-bold text-white mb-4 drop-shadow-[0_2px_8px_rgba(255,255,255,0.12)]">Review your answers</h3>
-                      <div className="space-y-3 max-h-[420px] overflow-auto pr-2">
-                        {results.map((item, i) => (
-                          <div key={i} className="rounded-2xl bg-slate-900/60 p-4 border border-white/5">
-                            <div className="flex items-center justify-between gap-4">
-                              <div className="font-bold text-xl text-white">{item.prompt}</div>
-                              {item.correct ? (
-                                <CheckCircle2 className="w-5 h-5 text-emerald-300 shrink-0" />
-                              ) : (
-                                <XCircle className="w-5 h-5 text-red-300 shrink-0" />
-                              )}
-                            </div>
-                            <div className="text-sm text-white/85 mt-2">
-                              Your answer: <span className="font-bold text-white">{item.given || "No answer"}</span> • Correct answer: <span className="font-bold text-white">{item.expected}</span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  <Card className="bg-amber-500/10 border-amber-300/20 rounded-3xl">
-                    <CardContent className="p-6 md:p-8">
-                      <h3 className="text-2xl font-bold text-white mb-4 drop-shadow-[0_2px_8px_rgba(255,255,255,0.12)]">Mental strategy tip</h3>
-                      <div className="space-y-4 max-h-[420px] overflow-auto pr-2">
-                        {incorrectItems.length > 0 ? (
-                          incorrectItems.map((item, i) => (
-                            <div key={i} className="rounded-2xl bg-slate-900/60 p-4 border border-white/5">
-                              <div className="font-bold text-xl text-white mb-1">{item.prompt}</div>
-                              <div className="text-sm text-white/85 mb-2">Correct answer: {item.expected}</div>
-                              <div className="text-sm leading-6 text-amber-50/90">{item.strategy}</div>
-                            </div>
-                          ))
-                        ) : (
-                          <p className="text-white/85">No incorrect responses to review this round.</p>
-                        )}
-                      </div>
-
-                      <div className="flex flex-wrap gap-3 pt-6">
-                        <Button onClick={restartSameLevel} className={`rounded-2xl h-12 px-6 ${currentTheme.primaryButton} text-white font-bold`}>
-                          Try {typeof level === "object" ? `${level.addsubLevel} + ${level.muldivLevel}` : level} Again
-                        </Button>
-                        <Button onClick={backToHome} variant="outline" className="rounded-2xl h-12 px-6 border-white/20 bg-white/5 text-white hover:bg-white/10">
-                          Home
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </div>
-              )}
+                  </div>
+                  <div className="space-y-2">
+                    <div className="text-sm uppercase tracking-[0.22em] text-blue-100/70">So close</div>
+                    <h2 className="text-3xl md:text-4xl font-black text-white">You were very close on {testingState.pendingRetry.level}</h2>
+                    <p className="text-blue-100/80 max-w-2xl mx-auto">
+                      You scored <span className="font-bold text-white">{testingState.pendingRetry.score} / 15</span>. You can have one more try at this level because you were so close to moving up.
+                    </p>
+                  </div>
+                  <div className="rounded-2xl bg-amber-400/10 border border-amber-300/20 px-5 py-4 max-w-2xl mx-auto text-amber-100">
+                    If you score 12/15 or 13/15 again, you will stay on this level with that score.
+                  </div>
+                  <div className="flex justify-center gap-3 flex-wrap">
+                    <Button onClick={retryCloseCallTestingLevel} className={`rounded-2xl h-12 px-6 ${actionButtonClass} text-white font-bold`}>
+                      Try this level again
+                    </Button>
+                    <Button onClick={continueCloseCallTestingLevel} variant="outline" className="rounded-2xl h-12 px-6 border-white/20 bg-white/5 text-white hover:bg-white/10 font-bold">
+                      Move on
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
             </motion.div>
           )}
 
@@ -3449,7 +7152,11 @@ export default function NSWProgressionsMathGame() {
                   <div className="text-blue-100/70 text-sm">Testing complete</div>
                   <h2 className="text-4xl md:text-5xl font-black">{playerName?.trim() ? `${playerName}'s current levels updated` : "Current levels updated"}</h2>
                   <p className="text-blue-100/80 max-w-2xl mx-auto">
-                    Testing mode has worked out the student’s current placement and saved it to this device.
+                    {testingState?.runType === "mixed"
+                      ? "Mixed Testing has worked out both current placements, saved them to this device, and unlocked all Practice and Game modes."
+                      : testingState?.runType === "addsub"
+                      ? "AdS testing has updated the Addition and Subtraction placement, saved it to this device, and unlocked AdS practice and AdS race mode."
+                      : "MuS testing has updated the Multiplication and Division placement, saved it to this device, and unlocked MuS practice and MuS race mode."}
                   </p>
                   <div className="flex justify-center">
                     <Badge className="bg-emerald-400/20 text-emerald-50 border-none text-base px-4 py-2">Testing coins earned: +{testingCoinsEarned}</Badge>
@@ -3457,12 +7164,12 @@ export default function NSWProgressionsMathGame() {
                   <div className="grid md:grid-cols-2 gap-4 max-w-xl mx-auto text-left">
                     <div className="rounded-2xl bg-slate-900/60 border border-white/10 px-5 py-4">
                       <div className="text-sm text-blue-100/70 mb-1">Addition / Subtraction</div>
-                      <div className="text-3xl font-black">{userHistory.addsubLevel}</div>
+                      <div className="text-3xl font-black">{testingScores.addsubScore !== null ? userHistory.addsubLevel : "_____"}</div>
                       <div className="text-sm text-cyan-100/80 mt-2">{testingScores.addsubScore !== null ? `${testingScores.addsubScore}/15` : "No test yet"}</div>
                     </div>
                     <div className="rounded-2xl bg-slate-900/60 border border-white/10 px-5 py-4">
                       <div className="text-sm text-blue-100/70 mb-1">Multiplication / Division</div>
-                      <div className="text-3xl font-black">{userHistory.muldivLevel}</div>
+                      <div className="text-3xl font-black">{testingScores.muldivScore !== null ? userHistory.muldivLevel : "_____"}</div>
                       <div className="text-sm text-cyan-100/80 mt-2">{testingScores.muldivScore !== null ? `${testingScores.muldivScore}/15` : "No test yet"}</div>
                     </div>
                   </div>
@@ -3473,13 +7180,22 @@ export default function NSWProgressionsMathGame() {
                   )}
                   <div className="flex justify-center gap-3 flex-wrap">
                     {(testingScores.addsubScore >= 14 || testingScores.muldivScore >= 14) && (
-                      <Button onClick={startTestingMode} className={`rounded-2xl h-12 px-6 ${currentTheme.primaryButton} text-white font-bold`}>
-                        Retake Tests
+                      <Button
+                        onClick={() => startTestingMode(testingState?.runType || "mixed")}
+                        className={`rounded-2xl h-12 px-6 ${actionButtonClass} text-white font-bold`}
+                      >
+                        {testingState?.runType === "addsub" ? "Retake AdS Test" : testingState?.runType === "muldiv" ? "Retake MuS Test" : "Retake Mixed Testing"}
                       </Button>
                     )}
-                    <Button onClick={backToHome} variant={testingScores.addsubScore >= 14 || testingScores.muldivScore >= 14 ? "outline" : undefined} className={testingScores.addsubScore >= 14 || testingScores.muldivScore >= 14 ? "rounded-2xl h-12 px-6 border-white/20 bg-white/5 text-white hover:bg-white/10" : `rounded-2xl h-12 px-6 ${currentTheme.primaryButton} text-white font-bold`}>
-                      Back to Home
-                    </Button>
+                    {testingScores.addsubScore >= 14 || testingScores.muldivScore >= 14 ? (
+                      <Button onClick={exitToHome} variant="outline" className="rounded-2xl h-12 px-6 border-white/20 bg-white/5 text-white hover:bg-white/10">
+                        {minimalCopyMode ? "Home" : "Back to Home"}
+                      </Button>
+                    ) : (
+                      <Button onClick={exitToHome} className={`rounded-2xl h-12 px-6 ${actionButtonClass} text-white font-bold`}>
+                        {minimalCopyMode ? "Home" : "Back to Home"}
+                      </Button>
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -3501,8 +7217,8 @@ export default function NSWProgressionsMathGame() {
                     You completed all progression levels in this mode. You could now add class leaderboards, student names, or teacher-assigned level tracking.
                   </p>
                   <div className="flex justify-center gap-3">
-                    <Button onClick={backToHome} className={`rounded-2xl h-12 px-6 ${currentTheme.primaryButton} text-white font-bold`}>
-                      Back to Home
+                    <Button onClick={backToHome} className={`rounded-2xl h-12 px-6 ${actionButtonClass} text-white font-bold`}>
+                      {minimalCopyMode ? "Home" : "Back to Home"}
                     </Button>
                   </div>
                 </CardContent>
