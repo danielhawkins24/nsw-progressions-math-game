@@ -4970,37 +4970,17 @@ export default function NSWProgressionsMathGame() {
   const tugNextPullSeconds = tugNextPullMs > 0 ? (tugNextPullMs / 1000).toFixed(1) : "0.0";
   const tugNextPullProgress = screen === "tugGame" && tugState ? Math.max(0, Math.min(100, (tugNextPullMs / Math.max(1, Number(tugState.aiPullEveryMs || 1))) * 100)) : 0;
 
-  const TUG_PLAYER_WIN_POSITION = 18;
-  const TUG_TEACHER_WIN_POSITION = 82;
+  const TUG_PLAYER_WIN_POSITION = 82;
+  const TUG_TEACHER_WIN_POSITION = 18;
   const TUG_MATCH_POINT_BUFFER = 8;
   const tugRopePosition = typeof tugState?.ropePosition === "number" ? tugState.ropePosition : 50;
-  const tugPlayerMatchPoint = tugRopePosition <= TUG_PLAYER_WIN_POSITION + TUG_MATCH_POINT_BUFFER;
-  const tugTeacherMatchPoint = tugRopePosition >= TUG_TEACHER_WIN_POSITION - TUG_MATCH_POINT_BUFFER;
+  const tugPlayerMatchPoint = tugRopePosition >= TUG_PLAYER_WIN_POSITION - TUG_MATCH_POINT_BUFFER;
+  const tugTeacherMatchPoint = tugRopePosition <= TUG_TEACHER_WIN_POSITION + TUG_MATCH_POINT_BUFFER;
   const tugRopeDotClass = tugPlayerMatchPoint || tugTeacherMatchPoint
     ? "border-red-100 bg-red-500 shadow-[0_0_18px_rgba(239,68,68,0.5)]"
     : "border-cyan-100 bg-cyan-300 shadow-[0_0_18px_rgba(103,232,249,0.45)]";
 
-  useEffect(() => {
-    if (screen !== "tugGame") return;
-    if (!tugState || tugState.didLose || tugState.winner === "teacher") return;
-    const ropePosition = Number(tugState.ropePosition);
-    if (!Number.isFinite(ropePosition) || ropePosition < TUG_TEACHER_WIN_POSITION) return;
-
-    setFeedback("incorrect");
-    setTugState((prev) => {
-      if (!prev || prev.didLose || prev.winner === "teacher") return prev;
-      return {
-        ...prev,
-        didLose: true,
-        finished: true,
-        winner: "teacher",
-        result: "teacher",
-        endReason: "teacher_pull",
-        ropePosition: TUG_TEACHER_WIN_POSITION,
-      };
-    });
-    setScreen("tugResults");
-  }, [screen, tugState, setFeedback, setScreen, setTugState]);
+  
   const passed = score >= currentPassScore;
   const hasAddSubPlacement = testingScores.addsubScore !== null;
   const hasMulDivPlacement = testingScores.muldivScore !== null;
