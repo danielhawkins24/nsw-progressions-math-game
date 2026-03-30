@@ -11,25 +11,43 @@ function cn(...classes) {
   return classes.filter(Boolean).join(" ");
 }
 
-function TimeTrialStopwatch({ prompt, timeLeft, totalTime, feedback, countdownLabel }) {
+function TimeTrialStopwatch({ prompt, timeLeft, totalTime, feedback, countdownLabel, monochrome = false }) {
   const progressRatio = Math.max(0, Math.min(1, timeLeft / Math.max(1, totalTime)));
   const radius = 128;
   const circumference = 2 * Math.PI * radius;
   const dashOffset = circumference * (1 - progressRatio);
+  const activeStroke = monochrome
+    ? "rgba(255,255,255,0.98)"
+    : feedback === "correct"
+    ? "rgba(74,222,128,0.95)"
+    : feedback === "incorrect"
+    ? "rgba(248,113,113,0.95)"
+    : "rgba(56,189,248,0.98)";
 
   return (
     <div className="relative mx-auto w-full max-w-[440px] aspect-square">
-      <div className="absolute left-1/2 top-0.5 -translate-x-1/2 w-16 h-7 rounded-t-[14px] rounded-b-[10px] bg-slate-950/96 border border-white/20 shadow-[0_8px_24px_rgba(15,23,42,0.4)]" />
-      <div className="absolute left-1/2 top-5 -translate-x-1/2 w-8 h-4 rounded-full bg-slate-900 border border-white/15" />
-      <div className="absolute inset-[8%] rounded-[48%] border border-white/15 bg-[radial-gradient(circle_at_50%_26%,rgba(125,211,252,0.16),transparent_38%),linear-gradient(180deg,rgba(15,23,42,0.98),rgba(2,6,23,0.96))] shadow-[0_24px_56px_rgba(2,6,23,0.55)]" />
+      <div className={cn(
+        "absolute left-1/2 top-0.5 -translate-x-1/2 w-16 h-7 rounded-t-[14px] rounded-b-[10px] border shadow-[0_8px_24px_rgba(15,23,42,0.4)]",
+        monochrome ? "bg-black border-white/70" : "bg-slate-950/96 border-white/20"
+      )} />
+      <div className={cn(
+        "absolute left-1/2 top-5 -translate-x-1/2 w-8 h-4 rounded-full border",
+        monochrome ? "bg-zinc-900 border-white/60" : "bg-slate-900 border-white/15"
+      )} />
+      <div className={cn(
+        "absolute inset-[8%] rounded-[48%] border shadow-[0_24px_56px_rgba(2,6,23,0.55)]",
+        monochrome
+          ? "border-white/70 bg-[radial-gradient(circle_at_50%_26%,rgba(255,255,255,0.12),transparent_38%),linear-gradient(180deg,rgba(0,0,0,0.98),rgba(24,24,27,0.96))]"
+          : "border-white/15 bg-[radial-gradient(circle_at_50%_26%,rgba(125,211,252,0.16),transparent_38%),linear-gradient(180deg,rgba(15,23,42,0.98),rgba(2,6,23,0.96))]"
+      )} />
 
       <svg className="absolute inset-[5%] w-[90%] h-[90%] -rotate-90" viewBox="0 0 300 300" fill="none" aria-hidden="true">
-        <circle cx="150" cy="150" r={radius} stroke="rgba(255,255,255,0.08)" strokeWidth="10" />
+        <circle cx="150" cy="150" r={radius} stroke={monochrome ? "rgba(255,255,255,0.18)" : "rgba(255,255,255,0.08)"} strokeWidth="10" />
         <circle
           cx="150"
           cy="150"
           r={radius}
-          stroke={feedback === "correct" ? "rgba(74,222,128,0.95)" : feedback === "incorrect" ? "rgba(248,113,113,0.95)" : "rgba(56,189,248,0.98)"}
+          stroke={activeStroke}
           strokeWidth="10"
           strokeLinecap="round"
           strokeDasharray={circumference}
@@ -38,11 +56,19 @@ function TimeTrialStopwatch({ prompt, timeLeft, totalTime, feedback, countdownLa
         />
       </svg>
 
-      <div className="absolute left-1/2 top-[12.5%] -translate-x-1/2 rounded-full bg-slate-950/94 border border-white/12 px-3 py-1 text-[11px] font-bold tracking-[0.16em] text-white/90 whitespace-nowrap shadow-[0_6px_18px_rgba(2,6,23,0.45)]">
+      <div className={cn(
+        "absolute left-1/2 top-[12.5%] -translate-x-1/2 rounded-full px-3 py-1 text-[11px] font-bold tracking-[0.16em] whitespace-nowrap shadow-[0_6px_18px_rgba(2,6,23,0.45)] border",
+        monochrome ? "bg-black text-white border-white/70" : "bg-slate-950/94 border-white/12 text-white/90"
+      )}>
         {timeLeft}s left
       </div>
 
-      <div className="absolute inset-[19%] rounded-full border border-white/10 bg-[radial-gradient(circle_at_50%_35%,rgba(255,255,255,0.06),transparent_52%),linear-gradient(180deg,rgba(15,23,42,0.95),rgba(2,6,23,0.98))] flex items-center justify-center text-center px-6 py-7 md:px-8 md:py-8 overflow-hidden">
+      <div className={cn(
+        "absolute inset-[19%] rounded-full flex items-center justify-center text-center px-6 py-7 md:px-8 md:py-8 overflow-hidden border",
+        monochrome
+          ? "border-white/70 bg-[radial-gradient(circle_at_50%_35%,rgba(255,255,255,0.08),transparent_52%),linear-gradient(180deg,rgba(0,0,0,0.98),rgba(24,24,27,0.98))]"
+          : "border-white/10 bg-[radial-gradient(circle_at_50%_35%,rgba(255,255,255,0.06),transparent_52%),linear-gradient(180deg,rgba(15,23,42,0.95),rgba(2,6,23,0.98))]"
+      )}>
         {countdownLabel ? (
           <motion.div
             key={countdownLabel}
@@ -55,15 +81,80 @@ function TimeTrialStopwatch({ prompt, timeLeft, totalTime, feedback, countdownLa
           </motion.div>
         ) : (
           <div className={cn(
-            "w-full max-w-[96%] text-[2.3rem] md:text-[3rem] font-black leading-[1.08] text-white drop-shadow-[0_4px_18px_rgba(255,255,255,0.12)] break-words",
-            feedback === "correct" && "text-emerald-200",
-            feedback === "incorrect" && "text-red-200"
+            monochrome
+              ? "w-full max-w-[96%] text-[2.5rem] md:text-[3.25rem] font-black leading-[1.04] text-white break-words"
+              : "w-full max-w-[96%] text-[2.3rem] md:text-[3rem] font-black leading-[1.08] text-white drop-shadow-[0_4px_18px_rgba(255,255,255,0.12)] break-words",
+            feedback === "correct" && !monochrome && "text-emerald-200",
+            feedback === "incorrect" && !monochrome && "text-red-200"
           )}>
             {prompt}
           </div>
         )}
       </div>
     </div>
+  );
+}
+
+function BilleaMinimalGamePanel({
+  timerLabel,
+  timerValue,
+  timerProgress = null,
+  questionLabel,
+  prompt,
+  answer,
+  setAnswer,
+  onSubmit,
+  inputRef,
+  feedback,
+  submitLabel = "Enter",
+  disabled = false,
+}) {
+  const clampedProgress = typeof timerProgress === "number" ? Math.max(0, Math.min(100, timerProgress)) : null;
+
+  return (
+    <Card className="bg-black border-white/75 rounded-3xl shadow-2xl">
+      <CardContent className="p-4 md:p-6">
+        <div className="max-w-4xl mx-auto space-y-4 md:space-y-5">
+          <div className="rounded-3xl border-2 border-white bg-zinc-950 px-4 py-4 text-center">
+            <div className="text-xs md:text-sm font-bold uppercase tracking-[0.24em] text-white/80">{timerLabel}</div>
+            <div className="text-4xl md:text-6xl font-black text-white mt-2">{timerValue}</div>
+            {clampedProgress !== null && (
+              <div className="mt-4 h-4 rounded-full bg-zinc-800 border border-white/40 overflow-hidden">
+                <motion.div className="h-full bg-white" animate={{ width: `${clampedProgress}%` }} transition={{ duration: 0.15 }} />
+              </div>
+            )}
+          </div>
+
+          <div className={cn(
+            "rounded-[2rem] border-2 px-5 py-8 md:px-8 md:py-10 text-center bg-black",
+            feedback === "correct" ? "border-white bg-zinc-900" : feedback === "incorrect" ? "border-white bg-zinc-800" : "border-white/85"
+          )}>
+            {questionLabel && <div className="text-sm md:text-base font-bold uppercase tracking-[0.24em] text-white/75 mb-4">{questionLabel}</div>}
+            <div className="text-[2.6rem] md:text-[4.2rem] font-black leading-[1.05] text-white">{prompt}</div>
+          </div>
+
+          <form onSubmit={onSubmit} className="space-y-3">
+            <Input
+              ref={inputRef}
+              autoFocus
+              value={answer}
+              onChange={(e) => setAnswer(e.target.value)}
+              placeholder="Type answer"
+              className="h-20 md:h-24 rounded-[2rem] !text-[2.6rem] md:!text-[3.2rem] leading-none font-black tracking-tight bg-black border-2 border-white text-white placeholder:text-white/35 text-center"
+              autoComplete="off"
+              disabled={disabled}
+            />
+            <Button
+              type="submit"
+              disabled={disabled}
+              className="w-full h-12 md:h-14 rounded-2xl bg-white text-black hover:bg-zinc-200 font-black text-lg disabled:bg-zinc-700 disabled:text-zinc-300"
+            >
+              {submitLabel}
+            </Button>
+          </form>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -121,41 +212,143 @@ const FREE_FALL_FAST_DURATION_MULTIPLIER = 0.72;
 const FREE_FALL_SPECIAL_GOLD_MS = 2000;
 const FREE_FALL_BOX_FLASH_MS = 260;
 const FREE_FALL_LANES = [8, 31, 54, 77];
-const TUG_OF_WAR_TEACHERS = [
-  "Teacher 1",
-  "Teacher 2",
-  "Teacher 3",
-  "Teacher 4",
-  "Teacher 5",
-  "Teacher 6",
-  "Teacher 7",
-  "Mrs Dong",
-  "Mr Hawkins",
-  "Mr Herbert",
-];
-
-const TUG_TEACHER_OVERRIDES = {
-  "8": {
-    name: "Mrs Dong",
-    icon: "🐇",
-    backgroundStyle: "bg-[repeating-linear-gradient(180deg,#166534_0px,#166534_36px,#991b1b_36px,#991b1b_72px)]",
-    ringStyle: "ring-4 ring-red-300/85 ring-offset-2 ring-offset-slate-950",
-    ringOverlay: "bg-[conic-gradient(from_0deg,_rgba(248,113,113,0.95),_rgba(52,211,153,0.95),_rgba(127,29,29,0.98),_rgba(248,113,113,0.95))]",
-  },
-  "9": {
-    name: "Mr Hawkins",
-    icon: "🦈",
-    backgroundStyle: "bg-[linear-gradient(180deg,#38bdf8_0%,#38bdf8_42%,#111827_42%,#111827_46%,#f8fafc_46%,#f8fafc_54%,#111827_54%,#111827_58%,#38bdf8_58%,#38bdf8_100%)]",
-    ringStyle: "ring-4 ring-cyan-300/85 ring-offset-2 ring-offset-slate-950",
-    ringOverlay: "bg-[conic-gradient(from_0deg,_rgba(186,230,253,0.95),_rgba(34,211,238,0.95),_rgba(15,23,42,0.98),_rgba(186,230,253,0.95))]",
-  },
-  "10": {
-    name: "Mr Herbert",
-    icon: "👑",
-    backgroundStyle: "bg-[radial-gradient(circle_at_30%_22%,#ffffff_0%,#f8fafc_18%,#e2e8f0_34%,#94a3b8_56%,#334155_78%,#020617_100%)]",
-    ringStyle: "ring-[5px] ring-slate-100/95 ring-offset-2 ring-offset-slate-950 shadow-[0_0_34px_rgba(226,232,240,0.78)]",
-    ringOverlay: "bg-[conic-gradient(from_0deg,_rgba(255,255,255,0.98),_rgba(226,232,240,0.98),_rgba(148,163,184,0.98),_rgba(255,255,255,0.98))]",
-  },
+const TUG_TEACHER_POOLS = {
+  1: [
+    { name: "Mrs Dabit", icon: "🍎" },
+    { name: "Mrs Korendis", icon: "📚" },
+    { name: "Mrs Rizk", icon: "✏️" },
+  ],
+  2: [
+    {
+      name: "Mrs Buccini",
+      icon: "⚽",
+      backgroundStyle: "bg-[linear-gradient(135deg,#166534_0%,#22c55e_55%,#f8fafc_100%)]",
+      ringStyle: "ring-4 ring-emerald-200/85 ring-offset-2 ring-offset-slate-950",
+      ringOverlay: "bg-[conic-gradient(from_0deg,_rgba(187,247,208,0.95),_rgba(34,197,94,0.95),_rgba(22,101,52,0.98),_rgba(187,247,208,0.95))]",
+    },
+    {
+      name: "Mrs Wass",
+      icon: "👮",
+      backgroundStyle: "bg-[linear-gradient(135deg,#0f172a_0%,#1d4ed8_46%,#94a3b8_100%)]",
+      ringStyle: "ring-4 ring-sky-200/85 ring-offset-2 ring-offset-slate-950",
+      ringOverlay: "bg-[conic-gradient(from_0deg,_rgba(191,219,254,0.95),_rgba(59,130,246,0.95),_rgba(148,163,184,0.98),_rgba(191,219,254,0.95))]",
+    },
+    { name: "Ms Kaplan", icon: "📝" },
+  ],
+  3: [
+    {
+      name: "Mr Orr",
+      icon: "🔨",
+      backgroundStyle: "bg-[linear-gradient(135deg,#7f1d1d_0%,#b91c1c_62%,#facc15_100%)]",
+      ringStyle: "ring-4 ring-amber-200/85 ring-offset-2 ring-offset-slate-950",
+      ringOverlay: "bg-[conic-gradient(from_0deg,_rgba(254,240,138,0.95),_rgba(239,68,68,0.95),_rgba(127,29,29,0.98),_rgba(254,240,138,0.95))]",
+    },
+    { name: "Mrs Steiner", icon: "📖" },
+    { name: "Mrs Reyani", icon: "🧠" },
+    { name: "Mrs Elsaket", icon: "📌" },
+  ],
+  4: [
+    { name: "Mrs Aga", icon: "🌟" },
+    {
+      name: "Ms Fletcher",
+      icon: "🏖️",
+      backgroundStyle: "bg-[linear-gradient(135deg,#38bdf8_0%,#fef08a_52%,#fb7185_100%)]",
+      ringStyle: "ring-4 ring-cyan-200/85 ring-offset-2 ring-offset-slate-950",
+      ringOverlay: "bg-[conic-gradient(from_0deg,_rgba(186,230,253,0.95),_rgba(253,224,71,0.95),_rgba(251,113,133,0.95),_rgba(186,230,253,0.95))]",
+    },
+    {
+      name: "Mr Tang",
+      icon: "🧮",
+      backgroundStyle: "bg-[linear-gradient(135deg,#0f172a_0%,#334155_46%,#22d3ee_100%)]",
+      ringStyle: "ring-4 ring-cyan-200/85 ring-offset-2 ring-offset-slate-950",
+      ringOverlay: "bg-[conic-gradient(from_0deg,_rgba(224,242,254,0.95),_rgba(34,211,238,0.95),_rgba(15,23,42,0.98),_rgba(224,242,254,0.95))]",
+    },
+  ],
+  5: [
+    { name: "Mrs Driscoll", icon: "📗" },
+    { name: "Ms Demanuele", icon: "🪄" },
+    {
+      name: "Mr Getsios",
+      icon: "🐓",
+      backgroundStyle: "bg-[linear-gradient(180deg,#082f49_0%,#082f49_42%,#f8fafc_42%,#f8fafc_46%,#dc2626_46%,#dc2626_50%,#2563eb_50%,#2563eb_54%,#f8fafc_54%,#f8fafc_58%,#082f49_58%,#082f49_100%)]",
+      ringStyle: "ring-4 ring-red-300/85 ring-offset-2 ring-offset-slate-950",
+      ringOverlay: "bg-[conic-gradient(from_0deg,_rgba(254,202,202,0.95),_rgba(239,68,68,0.95),_rgba(37,99,235,0.95),_rgba(254,202,202,0.95))]",
+    },
+  ],
+  6: [
+    { name: "Ms Glendhill", icon: "🖍️" },
+    {
+      name: "Mr Laidlaw",
+      icon: "🐶",
+      backgroundStyle: "bg-[repeating-linear-gradient(180deg,#1d4ed8_0px,#1d4ed8_34px,#f8fafc_34px,#f8fafc_52px,#1d4ed8_52px,#1d4ed8_86px)]",
+      ringStyle: "ring-4 ring-sky-200/85 ring-offset-2 ring-offset-slate-950",
+      ringOverlay: "bg-[conic-gradient(from_0deg,_rgba(219,234,254,0.95),_rgba(29,78,216,0.95),_rgba(248,250,252,0.98),_rgba(219,234,254,0.95))]",
+    },
+    { name: "Mrs Landels", icon: "📙" },
+  ],
+  7: [
+    {
+      name: "Ms Burnett",
+      icon: "🕶️",
+      backgroundStyle: "bg-[linear-gradient(135deg,#ec4899_0%,#8b5cf6_34%,#22d3ee_68%,#fde047_100%)]",
+      ringStyle: "ring-4 ring-pink-200/85 ring-offset-2 ring-offset-slate-950",
+      ringOverlay: "bg-[conic-gradient(from_0deg,_rgba(244,114,182,0.95),_rgba(139,92,246,0.95),_rgba(34,211,238,0.95),_rgba(253,224,71,0.95),_rgba(244,114,182,0.95))]",
+    },
+    {
+      name: "Mrs Lenaz",
+      icon: "🏃",
+      backgroundStyle: "bg-[linear-gradient(135deg,#7f1d1d_0%,#dc2626_58%,#f8fafc_100%)]",
+      ringStyle: "ring-4 ring-red-200/85 ring-offset-2 ring-offset-slate-950",
+      ringOverlay: "bg-[conic-gradient(from_0deg,_rgba(254,202,202,0.95),_rgba(239,68,68,0.95),_rgba(127,29,29,0.98),_rgba(254,202,202,0.95))]",
+    },
+    { name: "Mrs Rimac", icon: "📕" },
+    {
+      name: "Mr Hawkins",
+      icon: "🦈",
+      backgroundStyle: "bg-[linear-gradient(180deg,#38bdf8_0%,#38bdf8_42%,#111827_42%,#111827_46%,#f8fafc_46%,#f8fafc_54%,#111827_54%,#111827_58%,#38bdf8_58%,#38bdf8_100%)]",
+      ringStyle: "ring-4 ring-cyan-300/85 ring-offset-2 ring-offset-slate-950",
+      ringOverlay: "bg-[conic-gradient(from_0deg,_rgba(186,230,253,0.95),_rgba(34,211,238,0.95),_rgba(15,23,42,0.98),_rgba(186,230,253,0.95))]",
+    },
+  ],
+  8: [
+    { name: "Ms Sheppard", icon: "📘" },
+    { name: "Ms Mahendra", icon: "📚" },
+    { name: "Ms Cox", icon: "🖊️" },
+    {
+      name: "Mrs Lobb",
+      icon: "🦞",
+      backgroundStyle: "bg-[linear-gradient(180deg,#991b1b_0%,#991b1b_44%,#f8fafc_44%,#f8fafc_56%,#991b1b_56%,#991b1b_100%)]",
+      ringStyle: "ring-4 ring-red-300/85 ring-offset-2 ring-offset-slate-950",
+      ringOverlay: "bg-[conic-gradient(from_0deg,_rgba(254,202,202,0.95),_rgba(153,27,27,0.98),_rgba(248,250,252,0.95),_rgba(254,202,202,0.95))]",
+    },
+    { name: "Mrs Strachen", icon: "🏫" },
+  ],
+  9: [
+    {
+      name: "Mrs Dong",
+      icon: "🐇",
+      backgroundStyle: "bg-[repeating-linear-gradient(180deg,#166534_0px,#166534_36px,#991b1b_36px,#991b1b_72px)]",
+      ringStyle: "ring-4 ring-red-300/85 ring-offset-2 ring-offset-slate-950",
+      ringOverlay: "bg-[conic-gradient(from_0deg,_rgba(248,113,113,0.95),_rgba(52,211,153,0.95),_rgba(127,29,29,0.98),_rgba(248,113,113,0.95))]",
+    },
+    { name: "Mrs Obsioma", icon: "📓" },
+    {
+      name: "Mr Sharp",
+      icon: "💻",
+      backgroundStyle: "bg-[linear-gradient(135deg,#020617_0%,#0f172a_46%,#06b6d4_100%)]",
+      ringStyle: "ring-4 ring-cyan-200/85 ring-offset-2 ring-offset-slate-950",
+      ringOverlay: "bg-[conic-gradient(from_0deg,_rgba(224,242,254,0.95),_rgba(6,182,212,0.95),_rgba(2,6,23,0.98),_rgba(224,242,254,0.95))]",
+    },
+  ],
+  10: [
+    {
+      name: "Mr Herbert",
+      icon: "👑",
+      backgroundStyle: "bg-[radial-gradient(circle_at_30%_22%,#ffffff_0%,#f8fafc_18%,#e2e8f0_34%,#94a3b8_56%,#334155_78%,#020617_100%)]",
+      ringStyle: "ring-[5px] ring-slate-100/95 ring-offset-2 ring-offset-slate-950 shadow-[0_0_34px_rgba(226,232,240,0.78)]",
+      ringOverlay: "bg-[conic-gradient(from_0deg,_rgba(255,255,255,0.98),_rgba(226,232,240,0.98),_rgba(148,163,184,0.98),_rgba(255,255,255,0.98))]",
+    },
+  ],
 };
 
 function getTugAIPullInterval(roundNumber) {
@@ -2482,18 +2675,24 @@ function createTugTeacher(roundIndex = 0) {
     .filter((item) => item.category === "ring")
     .map((item) => ({ style: item.style, overlay: getPremiumRingOverlayClass(item.id) }))
     .filter((item) => item.style);
-  const ring = choice(ringOptions.length ? ringOptions : [{ style: "", overlay: null }]);
+
   const roundNumber = roundIndex + 1;
-  const override = TUG_TEACHER_OVERRIDES[roundNumber];
+  const teacherPool = TUG_TEACHER_POOLS[roundNumber] || [{ name: `Teacher ${roundNumber}`, icon: "🧑‍🏫" }];
+  const selectedTeacher = choice(teacherPool);
+  const ring = choice(ringOptions.length ? ringOptions : [{ style: "", overlay: null }]);
+  const safeId = String(selectedTeacher?.name || `Teacher ${roundNumber}`)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
 
   return {
-    id: `tug-teacher-${roundNumber}`,
+    id: `tug-teacher-${roundNumber}-${safeId || roundNumber}`,
     roundNumber,
-    name: override?.name || TUG_OF_WAR_TEACHERS[roundIndex] || `Teacher ${roundNumber}`,
-    icon: override?.icon || choice(emojiOptions.length ? emojiOptions : ["🦉", "🐲", "🦊", "🗿", "🧠", "🤖"]),
-    backgroundStyle: override?.backgroundStyle || choice(backgroundOptions.length ? backgroundOptions : ["bg-slate-900/70"]),
-    ringStyle: override?.ringStyle || ring.style || "",
-    ringOverlay: override?.ringOverlay || ring.overlay || null,
+    name: selectedTeacher?.name || `Teacher ${roundNumber}`,
+    icon: selectedTeacher?.icon || choice(emojiOptions.length ? emojiOptions : ["🦉", "🐲", "🦊", "🗿", "🧠", "🤖"]),
+    backgroundStyle: selectedTeacher?.backgroundStyle || choice(backgroundOptions.length ? backgroundOptions : ["bg-slate-900/70"]),
+    ringStyle: selectedTeacher?.ringStyle || ring.style || "",
+    ringOverlay: selectedTeacher?.ringOverlay || ring.overlay || null,
   };
 }
 
@@ -5953,114 +6152,133 @@ export default function NSWProgressionsMathGame() {
 
           {screen === "multiplayerGame" && currentQuestion && multiplayerState && (
             <motion.div key="multiplayerGame" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-3">
-              <Card className="bg-white/10 border-white/10 rounded-3xl shadow-2xl overflow-hidden">
-                <CardContent className="p-4 md:p-5 space-y-4">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Badge className="bg-cyan-500/20 text-cyan-50 border-none">Race Track</Badge>
-                    <Badge className="bg-purple-500/20 text-purple-50 border-none">{multiplayerState.selectedMode === "addsub" ? "Addition / Subtraction" : multiplayerState.selectedMode === "muldiv" ? "Multiplication / Division" : "Mixed"}</Badge>
-                    <Badge className="bg-emerald-500/20 text-emerald-50 border-none">First to {MULTIPLAYER_TARGET_SCORE}</Badge>
-                    <Badge className="bg-white/10 text-white border-none">{multiplayerState.elapsedTime}s</Badge>
-                    <Button type="button" onClick={exitToHome} variant="outline" className={cn("ml-auto rounded-2xl", topControlButtonClass)}>Back to Home</Button>
+              {isBilleaMode ? (
+                <div className="space-y-4">
+                  <div className="flex justify-end">
+                    <Button type="button" onClick={exitToHome} variant="outline" className={cn("rounded-2xl", topControlButtonClass)}>Back to Home</Button>
                   </div>
-
-                  <div className="rounded-3xl bg-slate-950/92 border border-white/10 p-4 md:p-5 space-y-4">
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <div className="text-white/70 text-xs uppercase tracking-[0.22em] mb-1">Race Track</div>
-                        <div className="text-xl font-bold text-white">Race to 30 correct answers</div>
-                      </div>
-                      <div className="rounded-2xl bg-slate-900/70 border border-white/10 px-4 py-2 text-sm text-white font-semibold">Target: {MULTIPLAYER_TARGET_SCORE}</div>
+                  <BilleaMinimalGamePanel
+                    timerLabel="Race timer"
+                    timerValue={`${multiplayerState.elapsedTime}s`}
+                    questionLabel="Race mode"
+                    prompt={currentQuestion.prompt}
+                    answer={answer}
+                    setAnswer={setAnswer}
+                    onSubmit={handleSubmit}
+                    inputRef={inputRef}
+                    feedback={feedback}
+                  />
+                </div>
+              ) : (
+                <Card className="bg-white/10 border-white/10 rounded-3xl shadow-2xl overflow-hidden">
+                  <CardContent className="p-4 md:p-5 space-y-4">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge className="bg-cyan-500/20 text-cyan-50 border-none">Race Track</Badge>
+                      <Badge className="bg-purple-500/20 text-purple-50 border-none">{multiplayerState.selectedMode === "addsub" ? "Addition / Subtraction" : multiplayerState.selectedMode === "muldiv" ? "Multiplication / Division" : "Mixed"}</Badge>
+                      <Badge className="bg-emerald-500/20 text-emerald-50 border-none">First to {MULTIPLAYER_TARGET_SCORE}</Badge>
+                      <Badge className="bg-white/10 text-white border-none">{multiplayerState.elapsedTime}s</Badge>
+                      <Button type="button" onClick={exitToHome} variant="outline" className={cn("ml-auto rounded-2xl", topControlButtonClass)}>Back to Home</Button>
                     </div>
 
-                    <div className="space-y-3">
-                      {[
-                        {
-                          id: "player",
-                          name: playerName?.trim() || "You",
-                          progress: multiplayerPlayerProgress,
-                          icon: equippedEmojiItem?.emoji || null,
-                          backgroundStyle: equippedBackgroundItem?.style,
-                          ringStyle: equippedRingItem?.style,
-                          ringOverlay: premiumRingOverlay,
-                          burst: feedback === "correct",
-                          score: multiplayerState.playerScore,
-                        },
-                        ...multiplayerState.opponents.map((opponent) => ({
-                          ...opponent,
-                          progress: Math.min(100, (Number(opponent.progress || 0) / MULTIPLAYER_TARGET_SCORE) * 100),
-                          score: Number(opponent.progress || 0),
-                        })),
-                      ].map((racer) => {
-                        const iconOffset = Math.max(2, Math.min(92, racer.progress));
-                        return (
-                          <div key={racer.id} className="grid grid-cols-[110px_minmax(0,1fr)] md:grid-cols-[140px_minmax(0,1fr)] gap-3 items-center">
-                            <div className="rounded-2xl bg-slate-900/70 border border-white/10 px-3 py-3 flex items-center justify-between gap-2 min-w-0">
-                              <div className="min-w-0">
-                                <div className="text-sm md:text-base font-black text-white truncate">{racer.name}</div>
-                                <div className="text-[10px] uppercase tracking-[0.16em] text-cyan-100/70">{racer.score}/{MULTIPLAYER_TARGET_SCORE}</div>
-                              </div>
-                              {racer.finishOrdinal && <div className="text-xs font-bold text-amber-200">#{racer.finishOrdinal}</div>}
-                            </div>
+                    <div className="rounded-3xl bg-slate-950/92 border border-white/10 p-4 md:p-5 space-y-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <div className="text-white/70 text-xs uppercase tracking-[0.22em] mb-1">Race Track</div>
+                          <div className="text-xl font-bold text-white">Race to 30 correct answers</div>
+                        </div>
+                        <div className="rounded-2xl bg-slate-900/70 border border-white/10 px-4 py-2 text-sm text-white font-semibold">Target: {MULTIPLAYER_TARGET_SCORE}</div>
+                      </div>
 
-                            <div className="relative h-14 rounded-2xl border overflow-hidden bg-slate-950/90 border-white/10">
-                              <div className="absolute inset-0 opacity-35 bg-[repeating-linear-gradient(90deg,rgba(255,255,255,0.07)_0px,rgba(255,255,255,0.07)_14px,transparent_14px,transparent_28px)]" />
-                              <div className="absolute inset-y-0 right-[2%] w-[6px] bg-[repeating-linear-gradient(180deg,#f8fafc_0px,#f8fafc_8px,#111827_8px,#111827_16px)]" />
-                              <motion.div
-                                className={cn("absolute top-1/2 -translate-y-1/2 w-9 h-9 rounded-full border border-white/20 overflow-hidden isolate shadow-[0_8px_18px_rgba(15,23,42,0.35)]", racer.burst && "scale-110")}
-                                animate={{ left: `calc(${iconOffset}% - 18px)`, scale: racer.burst ? [1, 1.12, 1] : 1 }}
-                                transition={{ left: { duration: 0.35, ease: "easeOut" }, scale: { duration: 0.3 } }}
-                              >
-                                {racer.ringOverlay && <div className={`absolute -inset-1 rounded-full opacity-95 ${racer.ringOverlay} blur-[1px]`} />}
-                                {racer.ringStyle && <div className={`absolute inset-0 rounded-full pointer-events-none ${racer.ringStyle}`} />}
-                                <div className="absolute inset-[3px] rounded-full flex items-center justify-center border border-white/15 overflow-hidden isolate">
-                                  <div className={getCircularBackgroundClass(racer.backgroundStyle)} />
-                                  {racer.icon ? <div className={getEmojiVisualClass(racer.icon, "text-2xl")}>{racer.icon}</div> : <UserCircle2 className="w-5 h-5 text-blue-100/85 relative z-10" />}
+                      <div className="space-y-3">
+                        {[
+                          {
+                            id: "player",
+                            name: playerName?.trim() || "You",
+                            progress: multiplayerPlayerProgress,
+                            icon: equippedEmojiItem?.emoji || null,
+                            backgroundStyle: equippedBackgroundItem?.style,
+                            ringStyle: equippedRingItem?.style,
+                            ringOverlay: premiumRingOverlay,
+                            burst: feedback === "correct",
+                            score: multiplayerState.playerScore,
+                          },
+                          ...multiplayerState.opponents.map((opponent) => ({
+                            ...opponent,
+                            progress: Math.min(100, (Number(opponent.progress || 0) / MULTIPLAYER_TARGET_SCORE) * 100),
+                            score: Number(opponent.progress || 0),
+                          })),
+                        ].map((racer) => {
+                          const iconOffset = Math.max(2, Math.min(92, racer.progress));
+                          return (
+                            <div key={racer.id} className="grid grid-cols-[110px_minmax(0,1fr)] md:grid-cols-[140px_minmax(0,1fr)] gap-3 items-center">
+                              <div className="rounded-2xl bg-slate-900/70 border border-white/10 px-3 py-3 flex items-center justify-between gap-2 min-w-0">
+                                <div className="min-w-0">
+                                  <div className="text-sm md:text-base font-black text-white truncate">{racer.name}</div>
+                                  <div className="text-[10px] uppercase tracking-[0.16em] text-cyan-100/70">{racer.score}/{MULTIPLAYER_TARGET_SCORE}</div>
                                 </div>
-                              </motion.div>
+                                {racer.finishOrdinal && <div className="text-xs font-bold text-amber-200">#{racer.finishOrdinal}</div>}
+                              </div>
+
+                              <div className="relative h-14 rounded-2xl border overflow-hidden bg-slate-950/90 border-white/10">
+                                <div className="absolute inset-0 opacity-35 bg-[repeating-linear-gradient(90deg,rgba(255,255,255,0.07)_0px,rgba(255,255,255,0.07)_14px,transparent_14px,transparent_28px)]" />
+                                <div className="absolute inset-y-0 right-[2%] w-[6px] bg-[repeating-linear-gradient(180deg,#f8fafc_0px,#f8fafc_8px,#111827_8px,#111827_16px)]" />
+                                <motion.div
+                                  className={cn("absolute top-1/2 -translate-y-1/2 w-9 h-9 rounded-full border border-white/20 overflow-hidden isolate shadow-[0_8px_18px_rgba(15,23,42,0.35)]", racer.burst && "scale-110")}
+                                  animate={{ left: `calc(${iconOffset}% - 18px)`, scale: racer.burst ? [1, 1.12, 1] : 1 }}
+                                  transition={{ left: { duration: 0.35, ease: "easeOut" }, scale: { duration: 0.3 } }}
+                                >
+                                  {racer.ringOverlay && <div className={`absolute -inset-1 rounded-full opacity-95 ${racer.ringOverlay} blur-[1px]`} />}
+                                  {racer.ringStyle && <div className={`absolute inset-0 rounded-full pointer-events-none ${racer.ringStyle}`} />}
+                                  <div className="absolute inset-[3px] rounded-full flex items-center justify-center border border-white/15 overflow-hidden isolate">
+                                    <div className={getCircularBackgroundClass(racer.backgroundStyle)} />
+                                    {racer.icon ? <div className={getEmojiVisualClass(racer.icon, "text-2xl")}>{racer.icon}</div> : <UserCircle2 className="w-5 h-5 text-blue-100/85 relative z-10" />}
+                                  </div>
+                                </motion.div>
+                              </div>
                             </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  <Card className="bg-white/5 border-white/10 rounded-3xl">
-                    <CardContent className="p-4 space-y-3">
-                      <div className={`rounded-3xl p-4 text-center transition-all duration-200 border ${feedback === "correct" ? "bg-emerald-500/20 ring-2 ring-emerald-400 border-emerald-200/30" : feedback === "incorrect" ? "bg-red-500/20 ring-2 ring-red-400 border-red-200/30" : "bg-slate-900/95 border-blue-200/20"}`}>
-                        <div className="text-[11px] md:text-xs uppercase tracking-[0.24em] text-blue-100/80 mb-2">Race question</div>
-                        <div className="text-2xl md:text-3xl font-black text-white leading-tight">{currentQuestion.prompt}</div>
+                          );
+                        })}
                       </div>
-                      <form onSubmit={handleSubmit} className="space-y-3">
-                        <Input
-                          ref={inputRef}
-                          autoFocus
-                          value={answer}
-                          onChange={(e) => setAnswer(e.target.value)}
-                          placeholder="Type answer"
-                          className="h-16 rounded-3xl !text-[2.3rem] leading-none font-black tracking-tight bg-white/12 border-white/20 text-white placeholder:text-white/40 text-center"
-                          autoComplete="off"
-                        />
-                        <Button type="submit" className="w-full h-11 rounded-2xl bg-cyan-500 hover:bg-cyan-400 text-sm md:text-base font-bold">Enter</Button>
-                      </form>
-                    </CardContent>
-                  </Card>
+                    </div>
 
-                  <div className="grid grid-cols-3 gap-3">
-                    <div className="rounded-2xl bg-slate-900/65 border border-white/10 px-3 py-3 text-center">
-                      <div className="text-[10px] uppercase tracking-[0.16em] text-blue-100/65">Your score</div>
-                      <div className="text-xl md:text-2xl font-black text-white mt-1">{multiplayerState.playerScore}</div>
+                    <Card className="bg-white/5 border-white/10 rounded-3xl">
+                      <CardContent className="p-4 space-y-3">
+                        <div className={`rounded-3xl p-4 text-center transition-all duration-200 border ${feedback === "correct" ? "bg-emerald-500/20 ring-2 ring-emerald-400 border-emerald-200/30" : feedback === "incorrect" ? "bg-red-500/20 ring-2 ring-red-400 border-red-200/30" : "bg-slate-900/95 border-blue-200/20"}`}>
+                          <div className="text-[11px] md:text-xs uppercase tracking-[0.24em] text-blue-100/80 mb-2">Race question</div>
+                          <div className="text-2xl md:text-3xl font-black text-white leading-tight">{currentQuestion.prompt}</div>
+                        </div>
+                        <form onSubmit={handleSubmit} className="space-y-3">
+                          <Input
+                            ref={inputRef}
+                            autoFocus
+                            value={answer}
+                            onChange={(e) => setAnswer(e.target.value)}
+                            placeholder="Type answer"
+                            className="h-16 rounded-3xl !text-[2.3rem] leading-none font-black tracking-tight bg-white/12 border-white/20 text-white placeholder:text-white/40 text-center"
+                            autoComplete="off"
+                          />
+                          <Button type="submit" className="w-full h-11 rounded-2xl bg-cyan-500 hover:bg-cyan-400 text-sm md:text-base font-bold">Enter</Button>
+                        </form>
+                      </CardContent>
+                    </Card>
+
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className="rounded-2xl bg-slate-900/65 border border-white/10 px-3 py-3 text-center">
+                        <div className="text-[10px] uppercase tracking-[0.16em] text-blue-100/65">Your score</div>
+                        <div className="text-xl md:text-2xl font-black text-white mt-1">{multiplayerState.playerScore}</div>
+                      </div>
+                      <div className="rounded-2xl bg-slate-900/65 border border-white/10 px-3 py-3 text-center">
+                        <div className="text-[10px] uppercase tracking-[0.16em] text-blue-100/65">Correct</div>
+                        <div className="text-xl md:text-2xl font-black text-white mt-1">{score}</div>
+                      </div>
+                      <div className="rounded-2xl bg-slate-900/65 border border-white/10 px-3 py-3 text-center">
+                        <div className="text-[10px] uppercase tracking-[0.16em] text-blue-100/65">Level</div>
+                        <div className="text-sm md:text-lg font-black text-white mt-1">{multiplayerState.selectedMode === "mixed" && multiplayerState.raceLevel && typeof multiplayerState.raceLevel === "object" ? `${multiplayerState.raceLevel.addsubLevel} + ${multiplayerState.raceLevel.muldivLevel}` : String(multiplayerState.raceLevel || "")}</div>
+                      </div>
                     </div>
-                    <div className="rounded-2xl bg-slate-900/65 border border-white/10 px-3 py-3 text-center">
-                      <div className="text-[10px] uppercase tracking-[0.16em] text-blue-100/65">Correct</div>
-                      <div className="text-xl md:text-2xl font-black text-white mt-1">{score}</div>
-                    </div>
-                    <div className="rounded-2xl bg-slate-900/65 border border-white/10 px-3 py-3 text-center">
-                      <div className="text-[10px] uppercase tracking-[0.16em] text-blue-100/65">Level</div>
-                      <div className="text-sm md:text-lg font-black text-white mt-1">{multiplayerState.selectedMode === "mixed" && multiplayerState.raceLevel && typeof multiplayerState.raceLevel === "object" ? `${multiplayerState.raceLevel.addsubLevel} + ${multiplayerState.raceLevel.muldivLevel}` : String(multiplayerState.raceLevel || "")}</div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+                  </CardContent>
+                </Card>
+              )}
             </motion.div>
           )}
 
@@ -6244,102 +6462,28 @@ export default function NSWProgressionsMathGame() {
 
           {screen === "game" && currentQuestion && (
             <motion.div key="game" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-3">
-              <Card className="bg-white/10 border-white/10 rounded-3xl shadow-2xl overflow-hidden">
-                <CardContent className="p-4 md:p-5 space-y-4">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Badge className={`${accentPillClass} border-none`}>{isTestingMode ? "Testing" : isTimeTrialMode ? "Time Trial" : "Practice"}</Badge>
-                    <Badge className="bg-white/10 text-white border-none">{isTestingMode ? (testingState?.phase === "muldiv" ? "MuS" : "AdS") : modeMeta[mode]?.title || "Mode"}</Badge>
-                    <Badge className="bg-white/10 text-white border-none">{mode === "mixed" && level && typeof level === "object" ? `${level.addsubLevel} + ${level.muldivLevel}` : String(level || "")}</Badge>
-                    <Button type="button" onClick={isTestingMode ? exitToHome : backToHome} variant="outline" className={cn("ml-auto rounded-2xl", topControlButtonClass)}>
+              {isBilleaMode ? (
+                <div className="space-y-4">
+                  <div className="flex justify-end">
+                    <Button type="button" onClick={isTestingMode ? exitToHome : backToHome} variant="outline" className={cn("rounded-2xl", topControlButtonClass)}>
                       Back to Home
                     </Button>
                   </div>
 
                   {isTimeTrialMode ? (
-                    <div className="space-y-3">
-                      <div className="grid xl:grid-cols-[minmax(0,1fr)_320px] gap-3 items-start">
-                        <div className="rounded-3xl bg-slate-950/92 border border-white/10 p-4 md:p-5">
-                          <TimeTrialStopwatch prompt={currentQuestion.prompt} timeLeft={timeLeft} totalTime={TIME_TRIAL_SECONDS} feedback={feedback} countdownLabel={timeTrialCountdownLabel} />
-                        </div>
-                        <Card className="bg-white/5 border-white/10 rounded-3xl">
-                          <CardContent className="p-3 md:p-4 h-full flex flex-col justify-center">
-                            <form onSubmit={handleSubmit} className="space-y-3">
-                              <Input
-                                ref={inputRef}
-                                autoFocus
-                                value={answer}
-                                onChange={(e) => setAnswer(e.target.value)}
-                                placeholder="Type answer"
-                                className="h-16 rounded-3xl !text-[2.1rem] md:!text-[2.4rem] leading-none font-black tracking-tight bg-white/12 border-white/20 text-white placeholder:text-white/40 text-center"
-                                autoComplete="off"
-                                disabled={isTimeTrialInteractionLocked}
-                              />
-                              <Button type="submit" disabled={isTimeTrialInteractionLocked} className="w-full h-11 rounded-2xl bg-cyan-500 hover:bg-cyan-400 text-base font-bold disabled:bg-slate-700 disabled:text-slate-300">Enter</Button>
-                            </form>
-                          </CardContent>
-                        </Card>
-                      </div>
-                      <Card className="bg-white/5 border-white/10 rounded-3xl">
-                        <CardContent className="p-3">
-                          <div className="grid grid-cols-3 gap-2 text-center">
-                            <div className="rounded-2xl bg-slate-900/65 border border-white/10 px-3 py-2">
-                              <div className="text-[10px] uppercase tracking-[0.16em] text-blue-100/65">Correct</div>
-                              <div className="text-xl md:text-2xl font-black text-white mt-1">{score}</div>
-                            </div>
-                            <div className="rounded-2xl bg-slate-900/65 border border-white/10 px-3 py-2">
-                              <div className="text-[10px] uppercase tracking-[0.16em] text-blue-100/65">Answered</div>
-                              <div className="text-xl md:text-2xl font-black text-white mt-1">{results.length}</div>
-                            </div>
-                            <div className="rounded-2xl bg-slate-900/65 border border-white/10 px-3 py-2">
-                              <div className="text-[10px] uppercase tracking-[0.16em] text-blue-100/65">Level</div>
-                              <div className="text-lg md:text-xl font-black text-white mt-1 break-words">{mode === "mixed" && level && typeof level === "object" ? `${level.addsubLevel} + ${level.muldivLevel}` : String(level || "")}</div>
-                            </div>
+                    <Card className="bg-black border-white/75 rounded-3xl shadow-2xl">
+                      <CardContent className="p-4 md:p-6">
+                        <div className="max-w-4xl mx-auto space-y-4">
+                          <div className="rounded-3xl border-2 border-white bg-black p-4 md:p-6">
+                            <TimeTrialStopwatch
+                              prompt={currentQuestion.prompt}
+                              timeLeft={timeLeft}
+                              totalTime={TIME_TRIAL_SECONDS}
+                              feedback={feedback}
+                              countdownLabel={timeTrialCountdownLabel}
+                              monochrome
+                            />
                           </div>
-                        </CardContent>
-                      </Card>
-                    </div>
-                  ) : (
-                    <div className="grid xl:grid-cols-[minmax(0,1fr)_240px] gap-3 items-start">
-                      <div className="space-y-3 min-w-0">
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
-                          <div className="rounded-2xl bg-slate-900/65 border border-white/10 px-3.5 py-3">
-                            <div className="text-[10px] uppercase tracking-[0.16em] text-blue-100/65">Correct</div>
-                            <div className="text-2xl md:text-3xl font-black text-white mt-1">{score}</div>
-                          </div>
-                          <div className="rounded-2xl bg-slate-900/65 border border-white/10 px-3.5 py-3">
-                            <div className="text-[10px] uppercase tracking-[0.16em] text-blue-100/65">Question</div>
-                            <div className="text-2xl md:text-3xl font-black text-white mt-1">{currentIndex + 1}/{roundQuestionCount}</div>
-                          </div>
-                          <div className="rounded-2xl bg-slate-900/65 border border-white/10 px-3.5 py-3">
-                            <div className="text-[10px] uppercase tracking-[0.16em] text-blue-100/65">Time</div>
-                            <div className="text-2xl md:text-3xl font-black text-white mt-1">{timeLeft}s</div>
-                          </div>
-                          <div className="rounded-2xl bg-slate-900/65 border border-white/10 px-3.5 py-3">
-                            <div className="text-[10px] uppercase tracking-[0.16em] text-blue-100/65">Target</div>
-                            <div className="text-2xl md:text-3xl font-black text-white mt-1">{currentPassScore}</div>
-                          </div>
-                        </div>
-
-                        <div className="rounded-3xl bg-slate-950/92 border border-white/10 p-4 md:p-5 space-y-3">
-                          <div className="space-y-2">
-                            <div className="flex items-center justify-between text-sm text-blue-100/80">
-                              <span>Round progress</span>
-                              <span>{results.length}/{roundQuestionCount} answered • Goal {currentPassScore}</span>
-                            </div>
-                            <div className="relative h-3.5 rounded-full bg-slate-800 border border-white/10 overflow-hidden">
-                              <div className="absolute inset-y-0 left-0 bg-white/10" style={{ width: `${GOAL_PROGRESS_PERCENT}%` }} />
-                              <div className="absolute inset-y-0 w-[3px] bg-amber-300 shadow-[0_0_10px_rgba(252,211,77,0.4)]" style={{ left: `calc(${GOAL_PROGRESS_PERCENT}% - 1.5px)` }} />
-                              <motion.div className="absolute inset-y-0 left-0 bg-emerald-400" animate={{ width: `${progressValue}%` }} transition={{ duration: 0.2 }} />
-                            </div>
-                          </div>
-
-                          <div className={`rounded-3xl p-4 md:p-5 text-center transition-all duration-200 border ${feedback === "correct" ? "bg-emerald-500/20 ring-2 ring-emerald-400 border-emerald-200/30" : feedback === "incorrect" ? "bg-red-500/20 ring-2 ring-red-400 border-red-200/30" : "bg-slate-900/95 border-blue-200/20"}`}>
-                            <div className="text-[11px] md:text-xs uppercase tracking-[0.24em] text-blue-100/80 mb-2">
-                              {isTestingMode ? (testingState?.phase === "muldiv" ? "MuS" : "AdS") : (mode === "muldiv" ? "MuS" : mode === "mixed" ? "Mixed" : "AdS")}
-                            </div>
-                            <div className="text-2xl md:text-4xl font-black text-white leading-tight text-center">{currentQuestion.prompt}</div>
-                          </div>
-
                           <form onSubmit={handleSubmit} className="space-y-3">
                             <Input
                               ref={inputRef}
@@ -6347,46 +6491,187 @@ export default function NSWProgressionsMathGame() {
                               value={answer}
                               onChange={(e) => setAnswer(e.target.value)}
                               placeholder="Type answer"
-                              className="h-16 md:h-18 rounded-3xl !text-[2.2rem] md:!text-[2.6rem] leading-none font-black tracking-tight bg-white/12 border-white/20 text-white placeholder:text-white/40 text-center"
+                              className="h-20 md:h-24 rounded-[2rem] !text-[2.6rem] md:!text-[3.2rem] leading-none font-black tracking-tight bg-black border-2 border-white text-white placeholder:text-white/35 text-center"
                               autoComplete="off"
+                              disabled={isTimeTrialInteractionLocked}
                             />
-                            <Button type="submit" className="w-full h-11 rounded-2xl bg-cyan-500 hover:bg-cyan-400 text-sm md:text-base font-bold">Enter</Button>
+                            <Button type="submit" disabled={isTimeTrialInteractionLocked} className="w-full h-12 md:h-14 rounded-2xl bg-white text-black hover:bg-zinc-200 font-black text-lg disabled:bg-zinc-700 disabled:text-zinc-300">
+                              Enter
+                            </Button>
                           </form>
                         </div>
-                      </div>
+                      </CardContent>
+                    </Card>
+                  ) : (
+                    <BilleaMinimalGamePanel
+                      timerLabel="Time left"
+                      timerValue={`${timeLeft}s`}
+                      timerProgress={(timeLeft / Math.max(1, currentRoundTime)) * 100}
+                      questionLabel={isTestingMode ? (testingState?.phase === "muldiv" ? "MuS" : "AdS") : mode === "mixed" ? `${level?.addsubLevel || ""} + ${level?.muldivLevel || ""}` : String(level || "")}
+                      prompt={currentQuestion.prompt}
+                      answer={answer}
+                      setAnswer={setAnswer}
+                      onSubmit={handleSubmit}
+                      inputRef={inputRef}
+                      feedback={feedback}
+                    />
+                  )}
 
+                  {isTestingMode && pendingTestingExitConfirm && (
+                    <div className="rounded-3xl bg-black border-2 border-white p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3 text-white">
+                      <div>Leave now? Your testing result for this round will not save.</div>
+                      <div className="flex gap-2">
+                        <Button type="button" onClick={exitToHome} className="rounded-2xl bg-white text-black hover:bg-zinc-200 font-bold px-4">Leave</Button>
+                        <Button type="button" onClick={cancelTestingExit} variant="outline" className="rounded-2xl border-white bg-black text-white hover:bg-zinc-900 px-4">Stay</Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <Card className="bg-white/10 border-white/10 rounded-3xl shadow-2xl overflow-hidden">
+                  <CardContent className="p-4 md:p-5 space-y-4">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge className={`${accentPillClass} border-none`}>{isTestingMode ? "Testing" : isTimeTrialMode ? "Time Trial" : "Practice"}</Badge>
+                      <Badge className="bg-white/10 text-white border-none">{isTestingMode ? (testingState?.phase === "muldiv" ? "MuS" : "AdS") : modeMeta[mode]?.title || "Mode"}</Badge>
+                      <Badge className="bg-white/10 text-white border-none">{mode === "mixed" && level && typeof level === "object" ? `${level.addsubLevel} + ${level.muldivLevel}` : String(level || "")}</Badge>
+                      <Button type="button" onClick={isTestingMode ? exitToHome : backToHome} variant="outline" className={cn("ml-auto rounded-2xl", topControlButtonClass)}>
+                        Back to Home
+                      </Button>
+                    </div>
+
+                    {isTimeTrialMode ? (
                       <div className="space-y-3">
+                        <div className="grid xl:grid-cols-[minmax(0,1fr)_320px] gap-3 items-start">
+                          <div className="rounded-3xl bg-slate-950/92 border border-white/10 p-4 md:p-5">
+                            <TimeTrialStopwatch prompt={currentQuestion.prompt} timeLeft={timeLeft} totalTime={TIME_TRIAL_SECONDS} feedback={feedback} countdownLabel={timeTrialCountdownLabel} />
+                          </div>
+                          <Card className="bg-white/5 border-white/10 rounded-3xl">
+                            <CardContent className="p-3 md:p-4 h-full flex flex-col justify-center">
+                              <form onSubmit={handleSubmit} className="space-y-3">
+                                <Input
+                                  ref={inputRef}
+                                  autoFocus
+                                  value={answer}
+                                  onChange={(e) => setAnswer(e.target.value)}
+                                  placeholder="Type answer"
+                                  className="h-16 rounded-3xl !text-[2.1rem] md:!text-[2.4rem] leading-none font-black tracking-tight bg-white/12 border-white/20 text-white placeholder:text-white/40 text-center"
+                                  autoComplete="off"
+                                  disabled={isTimeTrialInteractionLocked}
+                                />
+                                <Button type="submit" disabled={isTimeTrialInteractionLocked} className="w-full h-11 rounded-2xl bg-cyan-500 hover:bg-cyan-400 text-base font-bold disabled:bg-slate-700 disabled:text-slate-300">Enter</Button>
+                              </form>
+                            </CardContent>
+                          </Card>
+                        </div>
                         <Card className="bg-white/5 border-white/10 rounded-3xl">
-                          <CardContent className="p-4 space-y-3">
-                            <div className="rounded-2xl bg-slate-900/65 border border-white/10 px-4 py-3">
-                              <div className="text-[10px] uppercase tracking-[0.16em] text-blue-100/65">Level</div>
-                              <div className="text-xl md:text-2xl font-black text-white mt-1">{mode === "mixed" && level && typeof level === "object" ? `${level.addsubLevel} + ${level.muldivLevel}` : String(level || "")}</div>
-                            </div>
-                            <div className="rounded-2xl bg-slate-900/65 border border-white/10 px-4 py-3">
-                              <div className="text-[10px] uppercase tracking-[0.16em] text-blue-100/65">Answered</div>
-                              <div className="text-2xl font-black text-white mt-1">{results.length}</div>
-                            </div>
-                            <div className="rounded-2xl bg-slate-900/65 border border-white/10 px-4 py-3">
-                              <div className="text-[10px] uppercase tracking-[0.16em] text-blue-100/65">Remaining</div>
-                              <div className="text-2xl font-black text-white mt-1">{Math.max(0, roundQuestionCount - results.length)}</div>
+                          <CardContent className="p-3">
+                            <div className="grid grid-cols-3 gap-2 text-center">
+                              <div className="rounded-2xl bg-slate-900/65 border border-white/10 px-3 py-2">
+                                <div className="text-[10px] uppercase tracking-[0.16em] text-blue-100/65">Correct</div>
+                                <div className="text-xl md:text-2xl font-black text-white mt-1">{score}</div>
+                              </div>
+                              <div className="rounded-2xl bg-slate-900/65 border border-white/10 px-3 py-2">
+                                <div className="text-[10px] uppercase tracking-[0.16em] text-blue-100/65">Answered</div>
+                                <div className="text-xl md:text-2xl font-black text-white mt-1">{results.length}</div>
+                              </div>
+                              <div className="rounded-2xl bg-slate-900/65 border border-white/10 px-3 py-2">
+                                <div className="text-[10px] uppercase tracking-[0.16em] text-blue-100/65">Level</div>
+                                <div className="text-lg md:text-xl font-black text-white mt-1 break-words">{mode === "mixed" && level && typeof level === "object" ? `${level.addsubLevel} + ${level.muldivLevel}` : String(level || "")}</div>
+                              </div>
                             </div>
                           </CardContent>
                         </Card>
                       </div>
-                    </div>
-                  )}
+                    ) : (
+                      <div className="grid xl:grid-cols-[minmax(0,1fr)_240px] gap-3 items-start">
+                        <div className="space-y-3 min-w-0">
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
+                            <div className="rounded-2xl bg-slate-900/65 border border-white/10 px-3.5 py-3">
+                              <div className="text-[10px] uppercase tracking-[0.16em] text-blue-100/65">Correct</div>
+                              <div className="text-2xl md:text-3xl font-black text-white mt-1">{score}</div>
+                            </div>
+                            <div className="rounded-2xl bg-slate-900/65 border border-white/10 px-3.5 py-3">
+                              <div className="text-[10px] uppercase tracking-[0.16em] text-blue-100/65">Question</div>
+                              <div className="text-2xl md:text-3xl font-black text-white mt-1">{currentIndex + 1}/{roundQuestionCount}</div>
+                            </div>
+                            <div className="rounded-2xl bg-slate-900/65 border border-white/10 px-3.5 py-3">
+                              <div className="text-[10px] uppercase tracking-[0.16em] text-blue-100/65">Time</div>
+                              <div className="text-2xl md:text-3xl font-black text-white mt-1">{timeLeft}s</div>
+                            </div>
+                            <div className="rounded-2xl bg-slate-900/65 border border-white/10 px-3.5 py-3">
+                              <div className="text-[10px] uppercase tracking-[0.16em] text-blue-100/65">Target</div>
+                              <div className="text-2xl md:text-3xl font-black text-white mt-1">{currentPassScore}</div>
+                            </div>
+                          </div>
 
-                  {isTestingMode && pendingTestingExitConfirm && (
-                    <div className="rounded-3xl bg-amber-400/10 border border-amber-300/20 p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-                      <div className="text-amber-100">Leave now? Your testing result for this round will not save.</div>
-                      <div className="flex gap-2">
-                        <Button type="button" onClick={exitToHome} className="rounded-2xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-4">Leave</Button>
-                        <Button type="button" onClick={cancelTestingExit} variant="outline" className="rounded-2xl border-white/20 bg-white/5 text-white hover:bg-white/10 px-4">Stay</Button>
+                          <div className="rounded-3xl bg-slate-950/92 border border-white/10 p-4 md:p-5 space-y-3">
+                            <div className="space-y-2">
+                              <div className="flex items-center justify-between text-sm text-blue-100/80">
+                                <span>Round progress</span>
+                                <span>{results.length}/{roundQuestionCount} answered • Goal {currentPassScore}</span>
+                              </div>
+                              <div className="relative h-3.5 rounded-full bg-slate-800 border border-white/10 overflow-hidden">
+                                <div className="absolute inset-y-0 left-0 bg-white/10" style={{ width: `${GOAL_PROGRESS_PERCENT}%` }} />
+                                <div className="absolute inset-y-0 w-[3px] bg-amber-300 shadow-[0_0_10px_rgba(252,211,77,0.4)]" style={{ left: `calc(${GOAL_PROGRESS_PERCENT}% - 1.5px)` }} />
+                                <motion.div className="absolute inset-y-0 left-0 bg-emerald-400" animate={{ width: `${progressValue}%` }} transition={{ duration: 0.2 }} />
+                              </div>
+                            </div>
+
+                            <div className={`rounded-3xl p-4 md:p-5 text-center transition-all duration-200 border ${feedback === "correct" ? "bg-emerald-500/20 ring-2 ring-emerald-400 border-emerald-200/30" : feedback === "incorrect" ? "bg-red-500/20 ring-2 ring-red-400 border-red-200/30" : "bg-slate-900/95 border-blue-200/20"}`}>
+                              <div className="text-[11px] md:text-xs uppercase tracking-[0.24em] text-blue-100/80 mb-2">
+                                {isTestingMode ? (testingState?.phase === "muldiv" ? "MuS" : "AdS") : (mode === "muldiv" ? "MuS" : mode === "mixed" ? "Mixed" : "AdS")}
+                              </div>
+                              <div className="text-2xl md:text-4xl font-black text-white leading-tight text-center">{currentQuestion.prompt}</div>
+                            </div>
+
+                            <form onSubmit={handleSubmit} className="space-y-3">
+                              <Input
+                                ref={inputRef}
+                                autoFocus
+                                value={answer}
+                                onChange={(e) => setAnswer(e.target.value)}
+                                placeholder="Type answer"
+                                className="h-16 md:h-18 rounded-3xl !text-[2.2rem] md:!text-[2.6rem] leading-none font-black tracking-tight bg-white/12 border-white/20 text-white placeholder:text-white/40 text-center"
+                                autoComplete="off"
+                              />
+                              <Button type="submit" className="w-full h-11 rounded-2xl bg-cyan-500 hover:bg-cyan-400 text-sm md:text-base font-bold">Enter</Button>
+                            </form>
+                          </div>
+                        </div>
+
+                        <div className="space-y-3">
+                          <Card className="bg-white/5 border-white/10 rounded-3xl">
+                            <CardContent className="p-4 space-y-3">
+                              <div className="rounded-2xl bg-slate-900/65 border border-white/10 px-4 py-3">
+                                <div className="text-[10px] uppercase tracking-[0.16em] text-blue-100/65">Level</div>
+                                <div className="text-xl md:text-2xl font-black text-white mt-1">{mode === "mixed" && level && typeof level === "object" ? `${level.addsubLevel} + ${level.muldivLevel}` : String(level || "")}</div>
+                              </div>
+                              <div className="rounded-2xl bg-slate-900/65 border border-white/10 px-4 py-3">
+                                <div className="text-[10px] uppercase tracking-[0.16em] text-blue-100/65">Answered</div>
+                                <div className="text-2xl font-black text-white mt-1">{results.length}</div>
+                              </div>
+                              <div className="rounded-2xl bg-slate-900/65 border border-white/10 px-4 py-3">
+                                <div className="text-[10px] uppercase tracking-[0.16em] text-blue-100/65">Remaining</div>
+                                <div className="text-2xl font-black text-white mt-1">{Math.max(0, roundQuestionCount - results.length)}</div>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        </div>
                       </div>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
+                    )}
+
+                    {isTestingMode && pendingTestingExitConfirm && (
+                      <div className="rounded-3xl bg-amber-400/10 border border-amber-300/20 p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                        <div className="text-amber-100">Leave now? Your testing result for this round will not save.</div>
+                        <div className="flex gap-2">
+                          <Button type="button" onClick={exitToHome} className="rounded-2xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-4">Leave</Button>
+                          <Button type="button" onClick={cancelTestingExit} variant="outline" className="rounded-2xl border-white/20 bg-white/5 text-white hover:bg-white/10 px-4">Stay</Button>
+                        </div>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
             </motion.div>
           )}
 
@@ -6597,68 +6882,88 @@ export default function NSWProgressionsMathGame() {
 
           {screen === "kingGame" && currentQuestion && kingState && (
             <motion.div key="kingGame" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-3">
-              <Card className="bg-white/10 border-white/10 rounded-3xl shadow-2xl overflow-hidden">
-                <CardContent className="p-4 md:p-5 space-y-4">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Badge className={`${accentPillClass} border-none`}>King of the Hill</Badge>
-                    <Badge className="bg-white/10 text-white border-none">Round {kingState.roundNumber}</Badge>
-                    <Badge className={`${kingIsUrgent ? "bg-red-500/20 text-red-50" : "bg-white/10 text-white"} border-none`}>{timeLeft}s</Badge>
-                    <Button type="button" onClick={exitToHome} variant="outline" className={cn("ml-auto rounded-2xl", topControlButtonClass)}>Back to Home</Button>
+              {isBilleaMode ? (
+                <div className="space-y-4">
+                  <div className="flex justify-end">
+                    <Button type="button" onClick={exitToHome} variant="outline" className={cn("rounded-2xl", topControlButtonClass)}>Back to Home</Button>
                   </div>
-
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between text-xs uppercase tracking-[0.18em] text-blue-100/70">
-                      <span>Question timer</span>
-                      <span>{timeLeft}s / {kingState.timePerQuestion}s</span>
+                  <BilleaMinimalGamePanel
+                    timerLabel="Question timer"
+                    timerValue={`${timeLeft}s`}
+                    timerProgress={(timeLeft / Math.max(1, kingState.timePerQuestion || 1)) * 100}
+                    questionLabel={`Round ${kingState.roundNumber}`}
+                    prompt={currentQuestion.prompt}
+                    answer={answer}
+                    setAnswer={setAnswer}
+                    onSubmit={handleSubmit}
+                    inputRef={inputRef}
+                    feedback={feedback}
+                  />
+                </div>
+              ) : (
+                <Card className="bg-white/10 border-white/10 rounded-3xl shadow-2xl overflow-hidden">
+                  <CardContent className="p-4 md:p-5 space-y-4">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge className={`${accentPillClass} border-none`}>King of the Hill</Badge>
+                      <Badge className="bg-white/10 text-white border-none">Round {kingState.roundNumber}</Badge>
+                      <Badge className={`${kingIsUrgent ? "bg-red-500/20 text-red-50" : "bg-white/10 text-white"} border-none`}>{timeLeft}s</Badge>
+                      <Button type="button" onClick={exitToHome} variant="outline" className={cn("ml-auto rounded-2xl", topControlButtonClass)}>Back to Home</Button>
                     </div>
-                    <div className="h-3 rounded-full bg-slate-900/80 border border-white/10 overflow-hidden">
-                      <motion.div
-                        className={`${kingIsUrgent ? "bg-red-400" : "bg-cyan-400"} h-full`}
-                        animate={{ width: `${Math.max(0, Math.min(100, (timeLeft / Math.max(1, kingState.timePerQuestion || 1)) * 100))}%` }}
-                        transition={{ duration: 0.15 }}
-                      />
-                    </div>
-                  </div>
 
-                  <div className="rounded-3xl bg-slate-950/92 border border-white/10 p-4 space-y-4">
-                    <div className="grid md:grid-cols-[1fr_auto_1fr] gap-4 items-center">
-                      <div className="flex items-center gap-3 justify-end md:justify-end">
-                        <div className="text-right"><div className="text-lg font-black text-white">{playerName?.trim() || "You"}</div></div>
-                        <div className="relative w-20 h-20">
-                          {premiumRingOverlay && <div className={`absolute -inset-1 rounded-full opacity-95 ${premiumRingOverlay} blur-[1px]`} />}
-                          {equippedRingItem?.style && <div className={`absolute inset-0 rounded-full pointer-events-none ${equippedRingItem.style}`} />}
-                          <div className="absolute inset-[6px] rounded-full flex items-center justify-center border border-white/15 overflow-hidden isolate"><div className={getCircularBackgroundClass(equippedBackgroundItem?.style)} />{equippedEmojiItem ? <div className={getEmojiVisualClass(equippedEmojiItem.emoji, "text-4xl")}>{equippedEmojiItem.emoji}</div> : <UserCircle2 className="w-8 h-8 text-blue-100/85" />}</div>
-                        </div>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between text-xs uppercase tracking-[0.18em] text-blue-100/70">
+                        <span>Question timer</span>
+                        <span>{timeLeft}s / {kingState.timePerQuestion}s</span>
                       </div>
-                      <div className="text-center text-3xl md:text-4xl font-black text-white">VS</div>
-                      <div className="flex items-center gap-3 justify-start">
-                        <div className="relative w-20 h-20">
-                          {kingState.challenger?.ringOverlay && <div className={`absolute -inset-1 rounded-full opacity-95 ${kingState.challenger.ringOverlay} blur-[1px]`} />}
-                          {kingState.challenger?.ringStyle && <div className={`absolute inset-0 rounded-full pointer-events-none ${kingState.challenger.ringStyle}`} />}
-                          <div className="absolute inset-[6px] rounded-full flex items-center justify-center border border-white/15 overflow-hidden isolate"><div className={getCircularBackgroundClass(kingState.challenger?.backgroundStyle)} /><div className={getEmojiVisualClass(kingState.challenger?.icon, "text-4xl")}>{kingState.challenger?.icon}</div></div>
-                        </div>
-                        <div><div className="text-lg font-black text-white">{kingState.challenger?.name}</div></div>
+                      <div className="h-3 rounded-full bg-slate-900/80 border border-white/10 overflow-hidden">
+                        <motion.div
+                          className={`${kingIsUrgent ? "bg-red-400" : "bg-cyan-400"} h-full`}
+                          animate={{ width: `${Math.max(0, Math.min(100, (timeLeft / Math.max(1, kingState.timePerQuestion || 1)) * 100))}%` }}
+                          transition={{ duration: 0.15 }}
+                        />
                       </div>
                     </div>
 
-                    <div className={`rounded-3xl p-4 text-center transition-all duration-200 border ${feedback === "correct" ? "bg-emerald-500/20 ring-2 ring-emerald-400 border-emerald-200/30" : feedback === "incorrect" ? "bg-red-500/20 ring-2 ring-red-400 border-red-200/30" : kingIsUrgent ? "bg-red-500/15 border-red-300/30" : "bg-slate-900/95 border-blue-200/20"}`}>
-                      <div className="text-2xl md:text-4xl font-black text-white leading-tight">{currentQuestion.prompt}</div>
+                    <div className="rounded-3xl bg-slate-950/92 border border-white/10 p-4 space-y-4">
+                      <div className="grid md:grid-cols-[1fr_auto_1fr] gap-4 items-center">
+                        <div className="flex items-center gap-3 justify-end md:justify-end">
+                          <div className="text-right"><div className="text-lg font-black text-white">{playerName?.trim() || "You"}</div></div>
+                          <div className="relative w-20 h-20">
+                            {premiumRingOverlay && <div className={`absolute -inset-1 rounded-full opacity-95 ${premiumRingOverlay} blur-[1px]`} />}
+                            {equippedRingItem?.style && <div className={`absolute inset-0 rounded-full pointer-events-none ${equippedRingItem.style}`} />}
+                            <div className="absolute inset-[6px] rounded-full flex items-center justify-center border border-white/15 overflow-hidden isolate"><div className={getCircularBackgroundClass(equippedBackgroundItem?.style)} />{equippedEmojiItem ? <div className={getEmojiVisualClass(equippedEmojiItem.emoji, "text-4xl")}>{equippedEmojiItem.emoji}</div> : <UserCircle2 className="w-8 h-8 text-blue-100/85" />}</div>
+                          </div>
+                        </div>
+                        <div className="text-center text-3xl md:text-4xl font-black text-white">VS</div>
+                        <div className="flex items-center gap-3 justify-start">
+                          <div className="relative w-20 h-20">
+                            {kingState.challenger?.ringOverlay && <div className={`absolute -inset-1 rounded-full opacity-95 ${kingState.challenger.ringOverlay} blur-[1px]`} />}
+                            {kingState.challenger?.ringStyle && <div className={`absolute inset-0 rounded-full pointer-events-none ${kingState.challenger.ringStyle}`} />}
+                            <div className="absolute inset-[6px] rounded-full flex items-center justify-center border border-white/15 overflow-hidden isolate"><div className={getCircularBackgroundClass(kingState.challenger?.backgroundStyle)} /> <div className={getEmojiVisualClass(kingState.challenger?.icon, "text-4xl")}>{kingState.challenger?.icon}</div></div>
+                          </div>
+                          <div><div className="text-lg font-black text-white">{kingState.challenger?.name}</div></div>
+                        </div>
+                      </div>
+
+                      <div className={`rounded-3xl p-4 text-center transition-all duration-200 border ${feedback === "correct" ? "bg-emerald-500/20 ring-2 ring-emerald-400 border-emerald-200/30" : feedback === "incorrect" ? "bg-red-500/20 ring-2 ring-red-400 border-red-200/30" : kingIsUrgent ? "bg-red-500/15 border-red-300/30" : "bg-slate-900/95 border-blue-200/20"}`}>
+                        <div className="text-2xl md:text-4xl font-black text-white leading-tight">{currentQuestion.prompt}</div>
+                      </div>
+
+                      <form onSubmit={handleSubmit} className="space-y-3 max-w-2xl mx-auto">
+                        <Input ref={inputRef} autoFocus value={answer} onChange={(e) => setAnswer(e.target.value)} placeholder="Type answer" className="h-16 rounded-3xl !text-[2.3rem] leading-none font-black tracking-tight bg-white/12 border-white/20 text-white placeholder:text-white/40 text-center" autoComplete="off" />
+                        <Button type="submit" className="w-full h-11 rounded-2xl bg-cyan-500 hover:bg-cyan-400 text-sm md:text-base font-bold">Enter</Button>
+                      </form>
                     </div>
 
-                    <form onSubmit={handleSubmit} className="space-y-3 max-w-2xl mx-auto">
-                      <Input ref={inputRef} autoFocus value={answer} onChange={(e) => setAnswer(e.target.value)} placeholder="Type answer" className="h-16 rounded-3xl !text-[2.3rem] leading-none font-black tracking-tight bg-white/12 border-white/20 text-white placeholder:text-white/40 text-center" autoComplete="off" />
-                      <Button type="submit" className="w-full h-11 rounded-2xl bg-cyan-500 hover:bg-cyan-400 text-sm md:text-base font-bold">Enter</Button>
-                    </form>
-                  </div>
-
-                  <div className="rounded-2xl bg-slate-900/70 border border-white/10 px-4 py-3 flex flex-wrap items-center justify-between gap-3 text-sm text-white/80">
-                    <span>Round {kingState.roundNumber}</span>
-                    <span>{results.length}/15 answered</span>
-                    <span>{score} correct</span>
-                    <span>{kingState.timePerQuestion}s per question</span>
-                  </div>
-                </CardContent>
-              </Card>
+                    <div className="rounded-2xl bg-slate-900/70 border border-white/10 px-4 py-3 flex flex-wrap items-center justify-between gap-3 text-sm text-white/80">
+                      <span>Round {kingState.roundNumber}</span>
+                      <span>{results.length}/15 answered</span>
+                      <span>{score} correct</span>
+                      <span>{kingState.timePerQuestion}s per question</span>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
             </motion.div>
           )}
 
@@ -6775,74 +7080,94 @@ export default function NSWProgressionsMathGame() {
 
           {screen === "tugGame" && currentQuestion && tugState && (
             <motion.div key="tugGame" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-3">
-              <Card className="bg-white/10 border-white/10 rounded-3xl shadow-2xl overflow-hidden">
-                <CardContent className="p-4 md:p-5 space-y-4">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Badge className={`${accentPillClass} border-none`}>Tug of War</Badge>
-                    <Badge className="bg-white/10 text-white border-none">Round {tugState.roundNumber} / {TUG_OF_WAR_TOTAL_ROUNDS}</Badge>
-                    <Button type="button" onClick={exitToHome} variant="outline" className={cn("ml-auto rounded-2xl", topControlButtonClass)}>Back to Home</Button>
+              {isBilleaMode ? (
+                <div className="space-y-4">
+                  <div className="flex justify-end">
+                    <Button type="button" onClick={exitToHome} variant="outline" className={cn("rounded-2xl", topControlButtonClass)}>Back to Home</Button>
                   </div>
-
-                  <div className="grid xl:grid-cols-[minmax(0,1fr)_280px] gap-3 items-start">
-                    <div className="space-y-3">
-                      <div className={cn("rounded-3xl bg-slate-950/92 border border-white/10 p-4 space-y-5", tugFlash?.side === "player" && "ring-2 ring-emerald-400", tugFlash?.side === "teacher" && "ring-2 ring-emerald-400") }>
-                        <div className="grid md:grid-cols-[1fr_auto_1fr] gap-4 items-center">
-                          <div className="flex items-center gap-3 justify-end">
-                            <div className="text-right">
-                              <div className="text-xs uppercase tracking-[0.18em] text-blue-100/65">Player</div>
-                              <div className="text-lg font-black text-white">{playerName?.trim() || "You"}</div>
-                            </div>
-                            <div className="w-16 h-16 rounded-full border border-white/15 bg-slate-900/90 flex items-center justify-center text-3xl shrink-0">{equippedEmojiItem?.emoji || "🙂"}</div>
-                          </div>
-                          <div className="text-center text-2xl md:text-3xl font-black text-white">VS</div>
-                          <div className="flex items-center gap-3 justify-start">
-                            <div className="w-16 h-16 rounded-full border border-white/15 bg-slate-900/90 flex items-center justify-center text-3xl shrink-0">{tugState.challenger?.icon || "🧑‍🏫"}</div>
-                            <div>
-                              <div className="text-xs uppercase tracking-[0.18em] text-blue-100/65">Teacher</div>
-                              <div className="text-lg font-black text-white">{tugState.challenger?.name}</div>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="rounded-3xl bg-slate-900/92 border border-white/10 px-5 py-6 space-y-3">
-                          <div className="flex items-center justify-between text-xs uppercase tracking-[0.18em] text-blue-100/65">
-                            <span>Your side</span>
-                            <span>Teacher side</span>
-                          </div>
-                          <div className="relative h-14 rounded-full overflow-hidden">
-                            <div className="absolute inset-x-[8%] top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-white/15" />
-                            <div className="absolute left-1/2 top-1/2 h-8 w-[2px] -translate-x-1/2 -translate-y-1/2 bg-white/35" />
-                            <div className={cn("absolute left-[8%] top-1/2 -translate-y-1/2 text-xl transition-transform", tugFlash?.side === "player" && "scale-125")}>{equippedEmojiItem?.emoji || "🙂"}</div>
-                            <div className={cn("absolute right-[8%] top-1/2 -translate-y-1/2 text-xl transition-transform", tugFlash?.side === "teacher" && "scale-125")}>{tugState.challenger?.icon || "🧑‍🏫"}</div>
-                            <motion.div
-                              className="absolute top-1/2 h-6 w-6 rounded-full border-2 border-cyan-100 bg-cyan-300 shadow-[0_0_18px_rgba(103,232,249,0.45)] -translate-x-1/2 -translate-y-1/2"
-                              animate={{ left: `${Math.max(8, Math.min(92, typeof tugState?.ropePosition === "number" ? tugState.ropePosition : 50))}%` }}
-                              transition={{ duration: 0.16 }}
-                            />
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className={`rounded-3xl p-4 text-center transition-all duration-200 border ${feedback === "correct" ? "bg-emerald-500/20 ring-2 ring-emerald-400 border-emerald-200/30" : feedback === "incorrect" ? "bg-red-500/20 ring-2 ring-red-400 border-red-200/30" : "bg-slate-900/95 border-blue-200/20"}`}>
-                        <div className="text-2xl md:text-3xl font-black text-white leading-tight">{currentQuestion.prompt}</div>
-                      </div>
-
-                      <form onSubmit={handleSubmit} className="space-y-3">
-                        <Input ref={inputRef} autoFocus value={answer} onChange={(e) => setAnswer(e.target.value)} placeholder="Type answer" className="h-16 rounded-3xl !text-[2.3rem] leading-none font-black tracking-tight bg-white/12 border-white/20 text-white placeholder:text-white/40 text-center" autoComplete="off" />
-                        <Button type="submit" className="w-full h-11 rounded-2xl bg-cyan-500 hover:bg-cyan-400 text-sm md:text-base font-bold">Enter</Button>
-                      </form>
+                  <BilleaMinimalGamePanel
+                    timerLabel="Teacher pull timer"
+                    timerValue={`${tugNextPullSeconds}s`}
+                    timerProgress={tugNextPullProgress}
+                    questionLabel={`Round ${tugState.roundNumber}`}
+                    prompt={currentQuestion.prompt}
+                    answer={answer}
+                    setAnswer={setAnswer}
+                    onSubmit={handleSubmit}
+                    inputRef={inputRef}
+                    feedback={feedback}
+                  />
+                </div>
+              ) : (
+                <Card className="bg-white/10 border-white/10 rounded-3xl shadow-2xl overflow-hidden">
+                  <CardContent className="p-4 md:p-5 space-y-4">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge className={`${accentPillClass} border-none`}>Tug of War</Badge>
+                      <Badge className="bg-white/10 text-white border-none">Round {tugState.roundNumber} / {TUG_OF_WAR_TOTAL_ROUNDS}</Badge>
+                      <Button type="button" onClick={exitToHome} variant="outline" className={cn("ml-auto rounded-2xl", topControlButtonClass)}>Back to Home</Button>
                     </div>
 
-                    <Card className="bg-white/5 border-white/10 rounded-3xl">
-                      <CardContent className="p-4 space-y-3">
-                        <div className="rounded-2xl bg-slate-900/65 border border-white/10 px-4 py-3"><div className="text-[10px] uppercase tracking-[0.16em] text-blue-100/65">Round</div><div className="text-2xl font-black text-white mt-1">{tugState.roundNumber}</div></div>
-                        <div className="rounded-2xl bg-slate-900/65 border border-white/10 px-4 py-3"><div className="text-[10px] uppercase tracking-[0.16em] text-blue-100/65">Correct</div><div className="text-2xl font-black text-white mt-1">{tugState.totalCorrectAnswers || 0}</div></div>
-                        <div className="rounded-2xl bg-slate-900/65 border border-white/10 px-4 py-3"><div className="text-[10px] uppercase tracking-[0.16em] text-blue-100/65">Teachers beaten</div><div className="text-2xl font-black text-white mt-1">{(tugState.beatenTeachers || []).length}</div></div>
-                      </CardContent>
-                    </Card>
-                  </div>
-                </CardContent>
-              </Card>
+                    <div className="grid xl:grid-cols-[minmax(0,1fr)_280px] gap-3 items-start">
+                      <div className="space-y-3">
+                        <div className={cn("rounded-3xl bg-slate-950/92 border border-white/10 p-4 space-y-5", tugFlash?.side === "player" && "ring-2 ring-emerald-400", tugFlash?.side === "teacher" && "ring-2 ring-emerald-400") }>
+                          <div className="grid md:grid-cols-[1fr_auto_1fr] gap-4 items-center">
+                            <div className="flex items-center gap-3 justify-end">
+                              <div className="text-right">
+                                <div className="text-xs uppercase tracking-[0.18em] text-blue-100/65">Player</div>
+                                <div className="text-lg font-black text-white">{playerName?.trim() || "You"}</div>
+                              </div>
+                              <div className="w-16 h-16 rounded-full border border-white/15 bg-slate-900/90 flex items-center justify-center text-3xl shrink-0">{equippedEmojiItem?.emoji || "🙂"}</div>
+                            </div>
+                            <div className="text-center text-2xl md:text-3xl font-black text-white">VS</div>
+                            <div className="flex items-center gap-3 justify-start">
+                              <div className="w-16 h-16 rounded-full border border-white/15 bg-slate-900/90 flex items-center justify-center text-3xl shrink-0">{tugState.challenger?.icon || "🧑‍🏫"}</div>
+                              <div>
+                                <div className="text-xs uppercase tracking-[0.18em] text-blue-100/65">Teacher</div>
+                                <div className="text-lg font-black text-white">{tugState.challenger?.name}</div>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="rounded-3xl bg-slate-900/92 border border-white/10 px-5 py-6 space-y-3">
+                            <div className="flex items-center justify-between text-xs uppercase tracking-[0.18em] text-blue-100/65">
+                              <span>Your side</span>
+                              <span>Teacher side</span>
+                            </div>
+                            <div className="relative h-14 rounded-full overflow-hidden">
+                              <div className="absolute inset-x-[8%] top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-white/15" />
+                              <div className="absolute left-1/2 top-1/2 h-8 w-[2px] -translate-x-1/2 -translate-y-1/2 bg-white/35" />
+                              <div className={cn("absolute left-[8%] top-1/2 -translate-y-1/2 text-xl transition-transform", tugFlash?.side === "player" && "scale-125")}>{equippedEmojiItem?.emoji || "🙂"}</div>
+                              <div className={cn("absolute right-[8%] top-1/2 -translate-y-1/2 text-xl transition-transform", tugFlash?.side === "teacher" && "scale-125")}>{tugState.challenger?.icon || "🧑‍🏫"}</div>
+                              <motion.div
+                                className="absolute top-1/2 h-6 w-6 rounded-full border-2 border-cyan-100 bg-cyan-300 shadow-[0_0_18px_rgba(103,232,249,0.45)] -translate-x-1/2 -translate-y-1/2"
+                                animate={{ left: `${Math.max(8, Math.min(92, typeof tugState?.ropePosition === "number" ? tugState.ropePosition : 50))}%` }}
+                                transition={{ duration: 0.16 }}
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className={`rounded-3xl p-4 text-center transition-all duration-200 border ${feedback === "correct" ? "bg-emerald-500/20 ring-2 ring-emerald-400 border-emerald-200/30" : feedback === "incorrect" ? "bg-red-500/20 ring-2 ring-red-400 border-red-200/30" : "bg-slate-900/95 border-blue-200/20"}`}>
+                          <div className="text-2xl md:text-3xl font-black text-white leading-tight">{currentQuestion.prompt}</div>
+                        </div>
+
+                        <form onSubmit={handleSubmit} className="space-y-3">
+                          <Input ref={inputRef} autoFocus value={answer} onChange={(e) => setAnswer(e.target.value)} placeholder="Type answer" className="h-16 rounded-3xl !text-[2.3rem] leading-none font-black tracking-tight bg-white/12 border-white/20 text-white placeholder:text-white/40 text-center" autoComplete="off" />
+                          <Button type="submit" className="w-full h-11 rounded-2xl bg-cyan-500 hover:bg-cyan-400 text-sm md:text-base font-bold">Enter</Button>
+                        </form>
+                      </div>
+
+                      <Card className="bg-white/5 border-white/10 rounded-3xl">
+                        <CardContent className="p-4 space-y-3">
+                          <div className="rounded-2xl bg-slate-900/65 border border-white/10 px-4 py-3"><div className="text-[10px] uppercase tracking-[0.16em] text-blue-100/65">Round</div><div className="text-2xl font-black text-white mt-1">{tugState.roundNumber}</div></div>
+                          <div className="rounded-2xl bg-slate-900/65 border border-white/10 px-4 py-3"><div className="text-[10px] uppercase tracking-[0.16em] text-blue-100/65">Correct</div><div className="text-2xl font-black text-white mt-1">{tugState.totalCorrectAnswers || 0}</div></div>
+                          <div className="rounded-2xl bg-slate-900/65 border border-white/10 px-4 py-3"><div className="text-[10px] uppercase tracking-[0.16em] text-blue-100/65">Teachers beaten</div><div className="text-2xl font-black text-white mt-1">{(tugState.beatenTeachers || []).length}</div></div>
+                        </CardContent>
+                      </Card>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
             </motion.div>
           )}
 
@@ -6918,19 +7243,19 @@ export default function NSWProgressionsMathGame() {
 
           {screen === "freeFallGame" && freeFallState && (
             <motion.div key="freeFallGame" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-3">
-              <Card className="bg-white/10 border-white/10 rounded-3xl shadow-2xl overflow-hidden">
+              <Card className={cn("rounded-3xl shadow-2xl overflow-hidden", isBilleaMode ? "bg-black border-white/75" : "bg-white/10 border-white/10")}>
                 <CardContent className="p-4 md:p-5 space-y-4">
                   <div className="flex flex-wrap items-center gap-2">
-                    <Badge className={`${accentPillClass} border-none`}>Free Fall</Badge>
-                    <Badge className="bg-white/10 text-white border-none">{freeFallState.levelLabel}</Badge>
-                    <Badge className="bg-white/10 text-white border-none">Level {freeFallDifficultyLevel}</Badge>
+                    <Badge className={isBilleaMode ? "bg-black text-white border border-white" : `${accentPillClass} border-none`}>Free Fall</Badge>
+                    <Badge className={isBilleaMode ? "bg-black text-white border border-white" : "bg-white/10 text-white border-none"}>{freeFallState.levelLabel}</Badge>
+                    <Badge className={isBilleaMode ? "bg-black text-white border border-white" : "bg-white/10 text-white border-none"}>Level {freeFallDifficultyLevel}</Badge>
                     <Button type="button" onClick={exitToHome} variant="outline" className={cn("ml-auto rounded-2xl", topControlButtonClass)}>Back to Home</Button>
                   </div>
 
                   <div className="grid xl:grid-cols-[minmax(0,1fr)_260px] gap-3 items-start">
                     <div className="space-y-3">
-                      <div className="relative rounded-3xl bg-slate-950/92 border border-white/10 overflow-hidden min-h-[480px]">
-                        <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(30,41,59,0.12)_0%,rgba(15,23,42,0)_28%,rgba(15,23,42,0)_72%,rgba(30,41,59,0.22)_100%)]" />
+                      <div className={cn("relative rounded-3xl overflow-hidden min-h-[480px] border", isBilleaMode ? "bg-black border-white/75" : "bg-slate-950/92 border-white/10")}>
+                        <div className={cn("absolute inset-0", isBilleaMode ? "bg-[linear-gradient(180deg,rgba(255,255,255,0.06)_0%,rgba(0,0,0,0)_28%,rgba(0,0,0,0)_72%,rgba(255,255,255,0.08)_100%)]" : "bg-[linear-gradient(180deg,rgba(30,41,59,0.12)_0%,rgba(15,23,42,0)_28%,rgba(15,23,42,0)_72%,rgba(30,41,59,0.22)_100%)]")} />
                         {(freeFallState.activeQuestions || []).slice(0, freeFallMaxOnScreen).map((question) => {
                           const topPercent = 6 + Math.min(68, Number(question.progress || 0) * 68 * freeFallVisualSpeedMultiplier);
                           const isGoldActive = Boolean(question.isSpecial && !question.resolvedAt && Date.now() <= Number(question.goldUntil || 0));
@@ -6942,7 +7267,17 @@ export default function NSWProgressionsMathGame() {
                               style={{ left: `${question.lane}%`, top: `${topPercent}%`, width: "18%" }}
                               className={cn(
                                 "absolute z-20 -translate-x-1/2 rounded-2xl border px-3 py-3 text-center shadow-[0_14px_30px_rgba(15,23,42,0.35)] transition-all duration-150",
-                                question.flash === "correct"
+                                isBilleaMode
+                                  ? question.flash === "correct"
+                                    ? "bg-white text-black border-white"
+                                    : question.flash === "miss"
+                                    ? "bg-zinc-700 text-white border-white"
+                                    : isGoldActive
+                                    ? "bg-zinc-800 text-white border-white animate-pulse"
+                                    : question.isFast
+                                    ? "bg-zinc-900 text-white border-white"
+                                    : "bg-black text-white border-white/80"
+                                  : question.flash === "correct"
                                   ? "bg-emerald-500/30 border-emerald-300/40 text-emerald-50"
                                   : question.flash === "miss"
                                   ? "bg-red-500/35 border-red-300/45 text-red-50"
@@ -6953,44 +7288,43 @@ export default function NSWProgressionsMathGame() {
                                   : "bg-slate-900/92 border-white/12 text-white"
                               )}
                             >
-                              {isGoldActive && <div className="text-[10px] font-black uppercase tracking-[0.18em] text-amber-100/90 mb-1">{question.flash === "correct" ? "+1 Life" : "Gold"}</div>}
-                              {!isGoldActive && question.isFast && <div className="text-[10px] font-black uppercase tracking-[0.18em] text-red-100/90 mb-1">Fast</div>}
+                              {isGoldActive && <div className={cn("text-[10px] font-black uppercase tracking-[0.18em] mb-1", isBilleaMode ? "text-white" : "text-amber-100/90")}>{question.flash === "correct" ? "+1 Life" : "Bonus"}</div>}
+                              {!isGoldActive && question.isFast && <div className={cn("text-[10px] font-black uppercase tracking-[0.18em] mb-1", isBilleaMode ? "text-white/90" : "text-red-100/90")}>Fast</div>}
                               <div className="text-lg md:text-xl font-black leading-tight">{question.prompt}</div>
                             </motion.div>
                           );
                         })}
 
-                        <div className="absolute inset-x-0 bottom-0 h-[72px] bg-slate-500 border-t border-slate-200/30" />
+                        <div className={cn("absolute inset-x-0 bottom-0 h-[72px] border-t", isBilleaMode ? "bg-zinc-700 border-white/50" : "bg-slate-500 border-slate-200/30")} />
                         <div className="absolute inset-x-0 bottom-[54px] h-[18px] flex items-end justify-between px-1 md:px-2 overflow-hidden">
                           {Array.from({ length: 18 }).map((_, index) => (
-                            <div key={index} className="w-[5.2%] h-full rounded-t-md bg-slate-500 border border-slate-200/20 border-b-0" />
+                            <div key={index} className={cn("w-[5.2%] h-full rounded-t-md border border-b-0", isBilleaMode ? "bg-zinc-700 border-white/35" : "bg-slate-500 border-slate-200/20")} />
                           ))}
                         </div>
-                        <div className="absolute left-0 bottom-[22px] w-[20%] h-[64px] bg-slate-500 border-y border-r border-slate-200/20 rounded-r-xl" />
-                        <div className="absolute right-0 bottom-[22px] w-[20%] h-[64px] bg-slate-500 border-y border-l border-slate-200/20 rounded-l-xl" />
-                        <div className="absolute left-[10%] bottom-[48px] w-8 h-16 rounded-t-xl bg-slate-500 border border-slate-200/20" />
-                        <div className="absolute right-[10%] bottom-[48px] w-8 h-16 rounded-t-xl bg-slate-500 border border-slate-200/20" />
-                        <div className="absolute left-1/2 bottom-[18px] -translate-x-1/2 w-[140px] h-[78px] rounded-t-[28px] bg-slate-600 border border-slate-200/25 shadow-[0_0_30px_rgba(15,23,42,0.4)]" />
-                        <div className="absolute left-1/2 bottom-[8px] -translate-x-1/2 w-16 h-12 rounded-t-2xl bg-slate-600 border border-slate-200/25" />
+                        <div className={cn("absolute left-0 bottom-[22px] w-[20%] h-[64px] border-y border-r rounded-r-xl", isBilleaMode ? "bg-zinc-700 border-white/35" : "bg-slate-500 border-slate-200/20")} />
+                        <div className={cn("absolute right-0 bottom-[22px] w-[20%] h-[64px] border-y border-l rounded-l-xl", isBilleaMode ? "bg-zinc-700 border-white/35" : "bg-slate-500 border-slate-200/20")} />
+                        <div className={cn("absolute left-[10%] bottom-[48px] w-8 h-16 rounded-t-xl border", isBilleaMode ? "bg-zinc-700 border-white/35" : "bg-slate-500 border-slate-200/20")} />
+                        <div className={cn("absolute right-[10%] bottom-[48px] w-8 h-16 rounded-t-xl border", isBilleaMode ? "bg-zinc-700 border-white/35" : "bg-slate-500 border-slate-200/20")} />
+                        <div className={cn("absolute left-1/2 bottom-[18px] -translate-x-1/2 w-[140px] h-[78px] rounded-t-[28px] border shadow-[0_0_30px_rgba(15,23,42,0.4)]", isBilleaMode ? "bg-zinc-700 border-white/40" : "bg-slate-600 border-slate-200/25")} />
+                        <div className={cn("absolute left-1/2 bottom-[8px] -translate-x-1/2 w-16 h-12 rounded-t-2xl border", isBilleaMode ? "bg-zinc-700 border-white/40" : "bg-slate-600 border-slate-200/25")} />
                         <div className="absolute left-1/2 bottom-[28px] -translate-x-1/2 text-4xl">{equippedEmojiItem?.emoji || "🙂"}</div>
 
-                        <div className="absolute left-3 top-3 flex items-center gap-1.5 z-30">
-                          {Array.from({ length: Math.max(0, freeFallState.lives || 0) }).map((_, index) => (
-                            <div key={`life-${index}`} className="text-xl drop-shadow-[0_0_10px_rgba(248,113,113,0.35)]">❤️</div>
-                          ))}
+                        <div className="absolute left-3 top-3 z-30 rounded-2xl bg-black/85 border border-white/35 px-3 py-2 text-left">
+                          <div className="text-[10px] uppercase tracking-[0.18em] text-white/65">Lives</div>
+                          <div className="text-xl font-black text-white">{freeFallState.lives || 0}</div>
                         </div>
-                        <div className="absolute right-3 top-3 z-30 rounded-2xl bg-slate-950/85 border border-white/10 px-3 py-2 text-right">
-                          <div className="text-[10px] uppercase tracking-[0.18em] text-blue-100/65">Timer</div>
+                        <div className="absolute right-3 top-3 z-30 rounded-2xl bg-black/85 border border-white/35 px-3 py-2 text-right">
+                          <div className="text-[10px] uppercase tracking-[0.18em] text-white/65">Timer</div>
                           <div className="text-xl font-black text-white">{freeFallState.elapsedSeconds || 0}s</div>
                         </div>
                         {freeFallState.correctAnswers > 0 && freeFallState.correctAnswers % 20 === 0 && (
                           <div className="absolute inset-x-0 top-16 flex justify-center z-30 pointer-events-none">
-                            <div className="rounded-2xl bg-cyan-400/20 border border-cyan-200/30 px-4 py-2 text-cyan-100 font-black uppercase tracking-[0.22em] shadow-[0_0_24px_rgba(34,211,238,0.2)]">Level Up</div>
+                            <div className={cn("rounded-2xl border px-4 py-2 font-black uppercase tracking-[0.22em]", isBilleaMode ? "bg-black border-white text-white" : "bg-cyan-400/20 border-cyan-200/30 text-cyan-100 shadow-[0_0_24px_rgba(34,211,238,0.2)]")}>Level Up</div>
                           </div>
                         )}
                         <div className="absolute right-3 top-20 space-y-2">
                           {(freeFallState.announcements || []).map((item) => (
-                            <div key={item.id} className={cn("rounded-2xl px-3 py-2 text-sm font-bold border", item.style === "life"
+                            <div key={item.id} className={cn("rounded-2xl px-3 py-2 text-sm font-bold border", isBilleaMode ? "bg-black border-white text-white" : item.style === "life"
                                 ? "bg-emerald-500/20 border-emerald-300/30 text-emerald-100"
                                 : item.style === "level"
                                 ? "bg-cyan-400/20 border-cyan-200/30 text-cyan-100"
@@ -7000,18 +7334,18 @@ export default function NSWProgressionsMathGame() {
                       </div>
 
                       <form onSubmit={handleSubmit} className="space-y-3">
-                        <Input ref={inputRef} autoFocus value={answer} onChange={(e) => setAnswer(e.target.value)} placeholder="Type answer" className="h-16 rounded-3xl !text-[2.3rem] leading-none font-black tracking-tight bg-white/12 border-white/20 text-white placeholder:text-white/40 text-center" autoComplete="off" />
-                        <Button type="submit" className="w-full h-11 rounded-2xl bg-cyan-500 hover:bg-cyan-400 text-sm md:text-base font-bold">Enter</Button>
+                        <Input ref={inputRef} autoFocus value={answer} onChange={(e) => setAnswer(e.target.value)} placeholder="Type answer" className={cn("h-16 rounded-3xl !text-[2.3rem] leading-none font-black tracking-tight text-center", isBilleaMode ? "bg-black border-2 border-white text-white placeholder:text-white/35" : "bg-white/12 border-white/20 text-white placeholder:text-white/40")} autoComplete="off" />
+                        <Button type="submit" className={cn("w-full h-11 rounded-2xl text-sm md:text-base font-bold", isBilleaMode ? "bg-white text-black hover:bg-zinc-200" : "bg-cyan-500 hover:bg-cyan-400 text-white")}>Enter</Button>
                       </form>
                     </div>
 
-                    <Card className="bg-white/5 border-white/10 rounded-3xl">
+                    <Card className={cn("rounded-3xl", isBilleaMode ? "bg-black border-white/75" : "bg-white/5 border-white/10")}>
                       <CardContent className="p-4 space-y-3">
-                        <div className="rounded-2xl bg-slate-900/65 border border-white/10 px-4 py-3"><div className="text-[11px] uppercase tracking-[0.16em] text-blue-100/65">Correct</div><div className="text-3xl font-black text-white mt-1">{freeFallState.correctAnswers || 0}</div></div>
-                        <div className="rounded-2xl bg-slate-900/65 border border-white/10 px-4 py-3"><div className="text-[11px] uppercase tracking-[0.16em] text-blue-100/65">Difficulty</div><div className="text-3xl font-black text-white mt-1">Lv {freeFallDifficultyLevel}</div></div>
-                        <div className="rounded-2xl bg-slate-900/65 border border-white/10 px-4 py-3"><div className="text-[11px] uppercase tracking-[0.16em] text-blue-100/65">Max on screen</div><div className="text-3xl font-black text-white mt-1">{freeFallMaxOnScreen}</div></div>
-                        <div className="rounded-2xl bg-slate-900/65 border border-white/10 px-4 py-3"><div className="text-[11px] uppercase tracking-[0.16em] text-blue-100/65">On screen</div><div className="text-3xl font-black text-white mt-1">{(freeFallState.activeQuestions || []).filter((question) => !question.resolvedAt).length}</div></div>
-                        <div className="rounded-2xl bg-slate-900/65 border border-white/10 px-4 py-3"><div className="text-[11px] uppercase tracking-[0.16em] text-blue-100/65">High score</div><div className="text-3xl font-black text-white mt-1">{freeFallModeHighScoreSeconds || freeFallHighScoreSeconds || 0}s</div></div>
+                        <div className={cn("rounded-2xl border px-4 py-3", isBilleaMode ? "bg-zinc-950 border-white/35" : "bg-slate-900/65 border-white/10")}><div className={cn("text-[11px] uppercase tracking-[0.16em]", isBilleaMode ? "text-white/65" : "text-blue-100/65")}>Correct</div><div className="text-3xl font-black text-white mt-1">{freeFallState.correctAnswers || 0}</div></div>
+                        <div className={cn("rounded-2xl border px-4 py-3", isBilleaMode ? "bg-zinc-950 border-white/35" : "bg-slate-900/65 border-white/10")}><div className={cn("text-[11px] uppercase tracking-[0.16em]", isBilleaMode ? "text-white/65" : "text-blue-100/65")}>Difficulty</div><div className="text-3xl font-black text-white mt-1">Lv {freeFallDifficultyLevel}</div></div>
+                        <div className={cn("rounded-2xl border px-4 py-3", isBilleaMode ? "bg-zinc-950 border-white/35" : "bg-slate-900/65 border-white/10")}><div className={cn("text-[11px] uppercase tracking-[0.16em]", isBilleaMode ? "text-white/65" : "text-blue-100/65")}>Max on screen</div><div className="text-3xl font-black text-white mt-1">{freeFallMaxOnScreen}</div></div>
+                        <div className={cn("rounded-2xl border px-4 py-3", isBilleaMode ? "bg-zinc-950 border-white/35" : "bg-slate-900/65 border-white/10")}><div className={cn("text-[11px] uppercase tracking-[0.16em]", isBilleaMode ? "text-white/65" : "text-blue-100/65")}>On screen</div><div className="text-3xl font-black text-white mt-1">{(freeFallState.activeQuestions || []).filter((question) => !question.resolvedAt).length}</div></div>
+                        <div className={cn("rounded-2xl border px-4 py-3", isBilleaMode ? "bg-zinc-950 border-white/35" : "bg-slate-900/65 border-white/10")}><div className={cn("text-[11px] uppercase tracking-[0.16em]", isBilleaMode ? "text-white/65" : "text-blue-100/65")}>High score</div><div className="text-3xl font-black text-white mt-1">{freeFallModeHighScoreSeconds || freeFallHighScoreSeconds || 0}s</div></div>
                       </CardContent>
                     </Card>
                   </div>
