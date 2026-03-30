@@ -4969,6 +4969,38 @@ export default function NSWProgressionsMathGame() {
   const tugNextPullMs = screen === "tugGame" && tugState ? Math.max(0, Number(tugState.nextAIPullAt || 0) - boostCountdownNow) : 0;
   const tugNextPullSeconds = tugNextPullMs > 0 ? (tugNextPullMs / 1000).toFixed(1) : "0.0";
   const tugNextPullProgress = screen === "tugGame" && tugState ? Math.max(0, Math.min(100, (tugNextPullMs / Math.max(1, Number(tugState.aiPullEveryMs || 1))) * 100)) : 0;
+
+  const TUG_PLAYER_WIN_POSITION = 18;
+  const TUG_TEACHER_WIN_POSITION = 82;
+  const TUG_MATCH_POINT_BUFFER = 8;
+  const tugRopePosition = typeof tugState?.ropePosition === "number" ? tugState.ropePosition : 50;
+  const tugPlayerMatchPoint = tugRopePosition <= TUG_PLAYER_WIN_POSITION + TUG_MATCH_POINT_BUFFER;
+  const tugTeacherMatchPoint = tugRopePosition >= TUG_TEACHER_WIN_POSITION - TUG_MATCH_POINT_BUFFER;
+  const tugRopeDotClass = tugPlayerMatchPoint || tugTeacherMatchPoint
+    ? "border-red-100 bg-red-500 shadow-[0_0_18px_rgba(239,68,68,0.5)]"
+    : "border-cyan-100 bg-cyan-300 shadow-[0_0_18px_rgba(103,232,249,0.45)]";
+
+  useEffect(() => {
+    if (screen !== "tugGame") return;
+    if (!tugState || tugState.didLose || tugState.winner === "teacher") return;
+    const ropePosition = Number(tugState.ropePosition);
+    if (!Number.isFinite(ropePosition) || ropePosition < TUG_TEACHER_WIN_POSITION) return;
+
+    setFeedback("incorrect");
+    setTugState((prev) => {
+      if (!prev || prev.didLose || prev.winner === "teacher") return prev;
+      return {
+        ...prev,
+        didLose: true,
+        finished: true,
+        winner: "teacher",
+        result: "teacher",
+        endReason: "teacher_pull",
+        ropePosition: TUG_TEACHER_WIN_POSITION,
+      };
+    });
+    setScreen("tugResults");
+  }, [screen, tugState, setFeedback, setScreen, setTugState]);
   const passed = score >= currentPassScore;
   const hasAddSubPlacement = testingScores.addsubScore !== null;
   const hasMulDivPlacement = testingScores.muldivScore !== null;
@@ -7133,16 +7165,27 @@ export default function NSWProgressionsMathGame() {
                               <span>Your side</span>
                               <span>Teacher side</span>
                             </div>
-                            <div className="relative h-14 rounded-full overflow-hidden">
-                              <div className="absolute inset-x-[8%] top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-white/15" />
-                              <div className="absolute left-1/2 top-1/2 h-8 w-[2px] -translate-x-1/2 -translate-y-1/2 bg-white/35" />
-                              <div className={cn("absolute left-[8%] top-1/2 -translate-y-1/2 text-xl transition-transform", tugFlash?.side === "player" && "scale-125")}>{equippedEmojiItem?.emoji || "🙂"}</div>
-                              <div className={cn("absolute right-[8%] top-1/2 -translate-y-1/2 text-xl transition-transform", tugFlash?.side === "teacher" && "scale-125")}>{tugState.challenger?.icon || "🧑‍🏫"}</div>
+                            <div className="relative h-[82px]">
+                              <div className="absolute inset-x-[14%] top-1/2 h-2 -translate-y-1/2 rounded-full bg-white/15" />
+                              <div className="absolute left-1/2 top-1/2 h-10 w-[2px] -translate-x-1/2 -translate-y-1/2 bg-white/35" />
+
+                              <div className={cn("absolute left-[14%] top-1/2 -translate-x-[118%] -translate-y-1/2 flex h-16 w-16 items-center justify-center rounded-full border border-white/15 bg-slate-900/95 text-4xl shadow-[0_10px_24px_rgba(15,23,42,0.38)] transition-transform", tugFlash?.side === "player" && "scale-125")}>
+                                {equippedEmojiItem?.emoji || "🙂"}
+                              </div>
+
+                              <div className={cn("absolute right-[14%] top-1/2 translate-x-[118%] -translate-y-1/2 flex h-16 w-16 items-center justify-center rounded-full border border-white/15 bg-slate-900/95 text-4xl shadow-[0_10px_24px_rgba(15,23,42,0.38)] transition-transform", tugFlash?.side === "teacher" && "scale-125")}>
+                                {tugState.challenger?.icon || "🧑‍🏫"}
+                              </div>
+
                               <motion.div
-                                className="absolute top-1/2 h-6 w-6 rounded-full border-2 border-cyan-100 bg-cyan-300 shadow-[0_0_18px_rgba(103,232,249,0.45)] -translate-x-1/2 -translate-y-1/2"
-                                animate={{ left: `${Math.max(8, Math.min(92, typeof tugState?.ropePosition === "number" ? tugState.ropePosition : 50))}%` }}
+                                className={cn("absolute top-1/2 h-7 w-7 rounded-full border-2 -translate-x-1/2 -translate-y-1/2", tugRopeDotClass)}
+                                animate={{ left: `${Math.max(14, Math.min(86, tugRopePosition))}%` }}
                                 transition={{ duration: 0.16 }}
                               />
+                            </div>
+                            <div className="flex items-center justify-between text-[11px] font-bold uppercase tracking-[0.16em] text-white/55">
+                              <span>{tugPlayerMatchPoint ? "One away" : "Pull left"}</span>
+                              <span>{tugTeacherMatchPoint ? "One away" : "Hold them off"}</span>
                             </div>
                           </div>
                         </div>
