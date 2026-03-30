@@ -199,7 +199,7 @@ const KING_OF_THE_HILL_MIN_SECONDS = 2;
 const KING_OF_THE_HILL_INTERMISSION_STEPS = ["Round over", "Faster", "Level up", "New challenger"];
 const TUG_OF_WAR_TOTAL_ROUNDS = 10;
 const TUG_OF_WAR_ROPE_START = 50;
-const TUG_OF_WAR_PLAYER_PULL = 12;
+const TUG_OF_WAR_PLAYER_PULL = 10;
 const TUG_OF_WAR_BASE_AI_PULL = TUG_OF_WAR_PLAYER_PULL;
 const TUG_OF_WAR_AI_PULL_INTERVAL_START = 10000;
 const TUG_OF_WAR_AI_PULL_INTERVAL_MIN = 1000;
@@ -7097,9 +7097,12 @@ export default function NSWProgressionsMathGame() {
                     <div className="text-4xl md:text-5xl font-black text-white">VS</div>
                     <div className="relative w-24 h-24"><div className="absolute inset-[6px] rounded-full flex items-center justify-center border border-white/15 overflow-hidden isolate"><div className={getCircularBackgroundClass(tugState.challenger?.backgroundStyle)} /><div className={getEmojiVisualClass(tugState.challenger?.icon, "text-5xl")}>{tugState.challenger?.icon}</div></div></div>
                   </div>
-                  <div>
+                  <div className="space-y-3">
+                    <div className="text-5xl md:text-7xl font-black tracking-tight text-white drop-shadow-[0_10px_28px_rgba(255,255,255,0.16)]">
+                      Round {tugState.roundNumber}
+                    </div>
                     <div className="text-3xl md:text-5xl font-black text-white">{tugState.challenger?.name}</div>
-                    <div className="text-blue-100/80 mt-2">Round {tugState.roundNumber} of {TUG_OF_WAR_TOTAL_ROUNDS}</div>
+                    <div className="text-lg md:text-2xl font-semibold text-blue-100/90">Teacher battle {tugState.roundNumber} of {TUG_OF_WAR_TOTAL_ROUNDS}</div>
                   </div>
                   <div className="max-w-xl mx-auto space-y-2">
                     <div className="flex items-center justify-between text-sm text-blue-100/80"><span>Starting in</span><span>{tugIntroSecondsLeft}s</span></div>
