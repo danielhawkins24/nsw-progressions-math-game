@@ -6,6 +6,7 @@ import { Progress } from "./components/ui/progress";
 import { Input } from "./components/ui/input";
 import { Badge } from "./components/ui/badge";
 import { CheckCircle2, XCircle, TimerReset, Trophy, Calculator, Flag, UserCircle2, ShoppingBag, Check, Palette, Cat, Pencil, Users, Rocket, Sparkles, CircleDollarSign } from "lucide-react";
+import { Analytics } from "@vercel/analytics/react";
 
 function cn(...classes) {
   return classes.filter(Boolean).join(" ");
@@ -7586,6 +7587,7 @@ export default function NSWProgressionsMathGame() {
             </motion.div>
           )}
         </AnimatePresence>
+      <Analytics />
       </div>
     </div>
   );
